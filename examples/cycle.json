@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "name": "Cycle example",
+  "nodes": [
+    {
+      "id": "node_Y7ZuEj",
+      "type": "WebhookTrigger",
+      "position": {
+        "x": 40,
+        "y": 204
+      },
+      "parameters": {
+        "path": "/v1/test"
+      }
+    },
+    {
+      "id": "node_q6IY0G",
+      "type": "AIAgent",
+      "position": {
+        "x": 360,
+        "y": 204
+      },
+      "parameters": {
+        "model": "openai:gpt-4o-mini",
+        "prompt": "",
+        "tools": ""
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_6Tfr9v",
+      "source": "node_Y7ZuEj",
+      "target": "node_q6IY0G"
+    },
+    {
+      "id": "edge_AgEMMY",
+      "source": "node_q6IY0G",
+      "target": "node_Y7ZuEj"
+    }
+  ]
+}

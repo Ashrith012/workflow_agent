@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "name": "Manzil — AI Activity",
+  "nodes": [
+    {
+      "id": "activity_trigger",
+      "type": "UIEventTrigger",
+      "position": {
+        "x": 80,
+        "y": 120
+      },
+      "parameters": {
+        "eventKey": "manzil.activity",
+        "allowedRoles": "user, admin",
+        "samplePayload": "{}"
+      }
+    },
+    {
+      "id": "history",
+      "type": "RunHistory",
+      "position": {
+        "x": 400,
+        "y": 120
+      },
+      "parameters": {
+        "scope": "mine",
+        "limit": "50",
+        "title": "Your recent AI requests",
+        "outputField": "activity"
+      }
+    },
+    {
+      "id": "respond",
+      "type": "RespondToUI",
+      "position": {
+        "x": 720,
+        "y": 120
+      },
+      "parameters": {
+        "title": "AI Activity",
+        "blocksFrom": "activity",
+        "sourcesFrom": "",
+        "emptyMessage": "No AI activity yet."
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_activity_trigger_history",
+      "source": "activity_trigger",
+      "target": "history"
+    },
+    {
+      "id": "edge_history_respond",
+      "source": "history",
+      "target": "respond"
+    }
+  ]
+}

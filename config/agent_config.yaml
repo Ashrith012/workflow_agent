@@ -1,0 +1,11 @@
+# Agent configuration and default parameters
+# Providers and models live in models.json (shared with the workflow UI's model picker).
+agent:
+  temperature: 0.7
+  max_tokens: 1024
+  timeout: 60
+
+prompts:
+  system: |
+    You are an intelligent, capable AI Agent running inside the workflow engine.
+    You can process user queries, formulate reasoning steps, and execute tasks efficiently.

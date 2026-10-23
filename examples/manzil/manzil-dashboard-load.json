@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "name": "Manzil — Dashboard home",
+  "nodes": [
+    {
+      "id": "home_trigger",
+      "type": "UIEventTrigger",
+      "position": {
+        "x": 80,
+        "y": 120
+      },
+      "parameters": {
+        "eventKey": "manzil.dashboard.load",
+        "allowedRoles": "user, admin",
+        "samplePayload": "{}"
+      }
+    },
+    {
+      "id": "projects",
+      "type": "QdrantSearch",
+      "position": {
+        "x": 400,
+        "y": 120
+      },
+      "parameters": {
+        "operation": "facet",
+        "collection": "project_documents",
+        "vectorField": "",
+        "topK": "200",
+        "filter": "",
+        "scoreThreshold": "",
+        "textField": "text",
+        "facetKey": "project_id",
+        "outputField": "projects",
+        "onError": "continue"
+      }
+    },
+    {
+      "id": "home_blocks",
+      "type": "SetFields",
+      "position": {
+        "x": 720,
+        "y": 120
+      },
+      "parameters": {
+        "mode": "merge",
+        "values": "{\n  \"home\": [\n    { \"type\": \"markdown\", \"title\": \"Project Execution Validation\", \"text\": \"Select a project and a domain. Every report is generated only from the connected knowledge source, with row-level citations.\" },\n    { \"type\": \"select\", \"name\": \"projectId\", \"label\": \"Project\", \"placeholder\": \"All projects\", \"options\": {{ $json.projects }} },\n    { \"type\": \"toggle\", \"name\": \"dashboard\", \"label\": \"Include executive dashboard\" },\n    { \"type\": \"buttonGroup\", \"title\": \"Domains\", \"buttons\": [{\"label\":\"Material Status\",\"eventKey\":\"manzil.domain\",\"payload\":{\"domain\":\"Material Status\"}},{\"label\":\"Sign-Off Status\",\"eventKey\":\"manzil.domain\",\"payload\":{\"domain\":\"Sign-Off Status\"}},{\"label\":\"Call Letter Status\",\"eventKey\":\"manzil.domain\",\"payload\":{\"domain\":\"Call Letter Status\"}},{\"label\":\"Inspection Status\",\"eventKey\":\"manzil.domain\",\"payload\":{\"domain\":\"Inspection Status\"}},{\"label\":\"Execution Progress\",\"eventKey\":\"manzil.domain\",\"payload\":{\"domain\":\"Execution Progress\"}},{\"label\":\"Work Completion\",\"eventKey\":\"manzil.domain\",\"payload\":{\"domain\":\"Work Completion\"}},{\"label\":\"Project Summary\",\"eventKey\":\"manzil.domain\",\"payload\":{\"domain\":\"Project Summary\"}}] }\n  ]\n}"
+      }
+    },
+    {
+      "id": "respond",
+      "type": "RespondToUI",
+      "position": {
+        "x": 1040,
+        "y": 120
+      },
+      "parameters": {
+        "title": "Dashboard",
+        "blocksFrom": "home",
+        "sourcesFrom": "",
+        "emptyMessage": ""
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_home_trigger_projects",
+      "source": "home_trigger",
+      "target": "projects"
+    },
+    {
+      "id": "edge_projects_home_blocks",
+      "source": "projects",
+      "target": "home_blocks"
+    },
+    {
+      "id": "edge_home_blocks_respond",
+      "source": "home_blocks",
+      "target": "respond"
+    }
+  ]
+}

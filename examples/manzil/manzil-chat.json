@@ -1,0 +1,176 @@
+{
+  "version": 1,
+  "name": "Manzil — Chat with AI",
+  "nodes": [
+    {
+      "id": "chat_trigger",
+      "type": "ChatTrigger",
+      "position": {
+        "x": 80,
+        "y": 120
+      },
+      "parameters": {
+        "eventKey": "manzil.chat",
+        "allowedRoles": "user, admin",
+        "samplePayload": "{\n  \"message\": \"What is the material status? Include an executive dashboard.\",\n  \"sessionId\": \"test\",\n  \"history\": [],\n  \"projectId\": \"\"\n}"
+      }
+    },
+    {
+      "id": "classify",
+      "type": "TextClassifier",
+      "position": {
+        "x": 400,
+        "y": 120
+      },
+      "parameters": {
+        "text": "{{ $json.message }}",
+        "categories": "{\n  \"Material Status\": [\n    \"material\",\n    \"delivery\",\n    \"delivered\",\n    \"challan\",\n    \"supply\",\n    \"test certificate\",\n    \"reconciliation\",\n    \"replacement\"\n  ],\n  \"Sign-Off Status\": [\n    \"sign-off\",\n    \"signoff\",\n    \"sign off\",\n    \"signature\",\n    \"acceptance certificate\"\n  ],\n  \"Call Letter Status\": [\n    \"call letter\"\n  ],\n  \"Inspection Status\": [\n    \"inspection\",\n    \"rites\",\n    \"re-inspection\",\n    \"inspected\"\n  ],\n  \"Execution Progress\": [\n    \"execution progress\",\n    \"progress\",\n    \"milestone\"\n  ],\n  \"Work Completion\": [\n    \"work completion\",\n    \"completed work\",\n    \"completion\"\n  ],\n  \"Project Summary\": [\n    \"project summary\",\n    \"summary\",\n    \"overview\"\n  ]\n}",
+        "flags": "{\n  \"dashboard\": [\n    \"downloadable chart\",\n    \"downloadable dashboard\",\n    \"executive dashboard\",\n    \"project dashboard\",\n    \"executive summary image\",\n    \"visual dashboard\",\n    \"management dashboard\",\n    \"infographic\",\n    \"project snapshot\"\n  ]\n}",
+        "defaultCategory": "Project Summary",
+        "model": "groq:openai/gpt-oss-20b",
+        "outputField": "classification"
+      }
+    },
+    {
+      "id": "embed_query",
+      "type": "Embeddings",
+      "position": {
+        "x": 720,
+        "y": 120
+      },
+      "parameters": {
+        "model": "gemini:gemini-embedding-001",
+        "text": "{{ $json.classification.category }}: {{ $json.message }}",
+        "itemsField": "",
+        "textKey": "text",
+        "outputField": "vector"
+      }
+    },
+    {
+      "id": "qdrant_search",
+      "type": "QdrantSearch",
+      "position": {
+        "x": 1040,
+        "y": 120
+      },
+      "parameters": {
+        "operation": "search",
+        "collection": "project_documents",
+        "vectorField": "vector",
+        "topK": "12",
+        "filter": "{\n  \"project_id\": \"{{ $json.projectId }}\"\n}",
+        "scoreThreshold": "",
+        "textField": "text",
+        "facetKey": "",
+        "outputField": "chunks",
+        "onError": "fail"
+      }
+    },
+    {
+      "id": "sharepoint_mcp",
+      "type": "SharePointMCP",
+      "position": {
+        "x": 1360,
+        "y": 120
+      },
+      "parameters": {
+        "operation": "callTool",
+        "tool": "search_documents",
+        "arguments": "{\n  \"query\": \"{{ $json.classification.category }} {{ $json.message }}\"\n}",
+        "outputField": "sharepoint",
+        "onError": "continue"
+      }
+    },
+    {
+      "id": "report_agent",
+      "type": "AIAgent",
+      "position": {
+        "x": 80,
+        "y": 340
+      },
+      "parameters": {
+        "model": "groq:openai/gpt-oss-120b",
+        "tools": "",
+        "promptTemplates": "manzil_v2, manzil_ui_output",
+        "systemPrompt": "",
+        "prompt": "Requested domain: {{ $json.classification.category }}\nUser request: {{ $json.message }}\nProject ID filter: {{ $json.projectId }}",
+        "context": "Knowledge source chunks (cite by \"id\"):\n{{ $json.chunks }}\n\nSharePoint document metadata (versions, approvals):\n{{ $json.sharepoint }}",
+        "historyField": "history",
+        "responseFormat": "json",
+        "runIf": "",
+        "outputField": "report"
+      }
+    },
+    {
+      "id": "dashboard_agent",
+      "type": "AIAgent",
+      "position": {
+        "x": 400,
+        "y": 340
+      },
+      "parameters": {
+        "model": "groq:openai/gpt-oss-120b",
+        "tools": "",
+        "promptTemplates": "manzil_dashboard",
+        "systemPrompt": "",
+        "prompt": "Build the executive dashboard data for: {{ $json.classification.category }} — {{ $json.message }}",
+        "context": "Report:\n{{ $json.report }}\n\nKnowledge source chunks:\n{{ $json.chunks }}",
+        "historyField": "",
+        "responseFormat": "json",
+        "runIf": "{{ $json.classification.flags.dashboard }}",
+        "outputField": "dashboard"
+      }
+    },
+    {
+      "id": "respond",
+      "type": "RespondToUI",
+      "position": {
+        "x": 720,
+        "y": 340
+      },
+      "parameters": {
+        "title": "",
+        "blocksFrom": "dashboard, report",
+        "sourcesFrom": "chunks",
+        "emptyMessage": "Information not available in the connected knowledge source."
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_chat_trigger_classify",
+      "source": "chat_trigger",
+      "target": "classify"
+    },
+    {
+      "id": "edge_classify_embed_query",
+      "source": "classify",
+      "target": "embed_query"
+    },
+    {
+      "id": "edge_embed_query_qdrant_search",
+      "source": "embed_query",
+      "target": "qdrant_search"
+    },
+    {
+      "id": "edge_qdrant_search_sharepoint_mcp",
+      "source": "qdrant_search",
+      "target": "sharepoint_mcp"
+    },
+    {
+      "id": "edge_sharepoint_mcp_report_agent",
+      "source": "sharepoint_mcp",
+      "target": "report_agent"
+    },
+    {
+      "id": "edge_report_agent_dashboard_agent",
+      "source": "report_agent",
+      "target": "dashboard_agent"
+    },
+    {
+      "id": "edge_dashboard_agent_respond",
+      "source": "dashboard_agent",
+      "target": "respond"
+    }
+  ]
+}

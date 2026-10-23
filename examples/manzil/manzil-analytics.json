@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "name": "Manzil — Analytics",
+  "nodes": [
+    {
+      "id": "analytics_trigger",
+      "type": "UIEventTrigger",
+      "position": {
+        "x": 80,
+        "y": 120
+      },
+      "parameters": {
+        "eventKey": "manzil.analytics",
+        "allowedRoles": "user, admin",
+        "samplePayload": "{}"
+      }
+    },
+    {
+      "id": "stats",
+      "type": "RunStats",
+      "position": {
+        "x": 400,
+        "y": 120
+      },
+      "parameters": {
+        "scope": "all",
+        "days": "30",
+        "outputField": "analytics"
+      }
+    },
+    {
+      "id": "respond",
+      "type": "RespondToUI",
+      "position": {
+        "x": 720,
+        "y": 120
+      },
+      "parameters": {
+        "title": "Analytics",
+        "blocksFrom": "analytics",
+        "sourcesFrom": "",
+        "emptyMessage": ""
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_analytics_trigger_stats",
+      "source": "analytics_trigger",
+      "target": "stats"
+    },
+    {
+      "id": "edge_stats_respond",
+      "source": "stats",
+      "target": "respond"
+    }
+  ]
+}

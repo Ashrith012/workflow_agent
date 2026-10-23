@@ -1,0 +1,156 @@
+{
+  "version": 1,
+  "name": "Manzil — Ingest SharePoint into Qdrant",
+  "nodes": [
+    {
+      "id": "ingest_trigger",
+      "type": "UIEventTrigger",
+      "position": {
+        "x": 80,
+        "y": 120
+      },
+      "parameters": {
+        "eventKey": "manzil.ingest",
+        "allowedRoles": "admin",
+        "samplePayload": "{\n  \"path\": \"Projects/PRJ-001\",\n  \"projectId\": \"PRJ-001\"\n}"
+      }
+    },
+    {
+      "id": "read_folder",
+      "type": "SharePoint",
+      "position": {
+        "x": 400,
+        "y": 120
+      },
+      "parameters": {
+        "operation": "getFolderFiles",
+        "siteUrl": "",
+        "library": "",
+        "path": "{{ $json.path }}",
+        "listName": "",
+        "content": "",
+        "outputField": "sharepoint"
+      }
+    },
+    {
+      "id": "parse",
+      "type": "DocumentParser",
+      "position": {
+        "x": 720,
+        "y": 120
+      },
+      "parameters": {
+        "itemsField": "sharepoint.files",
+        "outputField": "documents"
+      }
+    },
+    {
+      "id": "split",
+      "type": "TextSplitter",
+      "position": {
+        "x": 1040,
+        "y": 120
+      },
+      "parameters": {
+        "itemsField": "documents",
+        "textKey": "text",
+        "chunkSize": "1500",
+        "overlap": "200",
+        "metadata": "{\n  \"project_id\": \"{{ $json.projectId }}\"\n}",
+        "outputField": "chunks"
+      }
+    },
+    {
+      "id": "embed_chunks",
+      "type": "Embeddings",
+      "position": {
+        "x": 1360,
+        "y": 120
+      },
+      "parameters": {
+        "model": "gemini:gemini-embedding-001",
+        "text": "",
+        "itemsField": "chunks",
+        "textKey": "text",
+        "outputField": ""
+      }
+    },
+    {
+      "id": "upsert",
+      "type": "QdrantUpsert",
+      "position": {
+        "x": 80,
+        "y": 340
+      },
+      "parameters": {
+        "collection": "project_documents",
+        "itemsField": "chunks",
+        "createIfMissing": "yes",
+        "outputField": "upsert"
+      }
+    },
+    {
+      "id": "summary",
+      "type": "SetFields",
+      "position": {
+        "x": 400,
+        "y": 340
+      },
+      "parameters": {
+        "mode": "merge",
+        "values": "{\n  \"result\": {\n    \"type\": \"markdown\",\n    \"title\": \"Ingestion complete\",\n    \"text\": \"Indexed {{ $json.upsert.upserted }} chunks into {{ $json.upsert.collection }} for project {{ $json.projectId }}. Documents that could not be parsed are listed below.\"\n  }\n}"
+      }
+    },
+    {
+      "id": "respond",
+      "type": "RespondToUI",
+      "position": {
+        "x": 720,
+        "y": 340
+      },
+      "parameters": {
+        "title": "Ingestion",
+        "blocksFrom": "result, skippedDocuments",
+        "sourcesFrom": "",
+        "emptyMessage": ""
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_ingest_trigger_read_folder",
+      "source": "ingest_trigger",
+      "target": "read_folder"
+    },
+    {
+      "id": "edge_read_folder_parse",
+      "source": "read_folder",
+      "target": "parse"
+    },
+    {
+      "id": "edge_parse_split",
+      "source": "parse",
+      "target": "split"
+    },
+    {
+      "id": "edge_split_embed_chunks",
+      "source": "split",
+      "target": "embed_chunks"
+    },
+    {
+      "id": "edge_embed_chunks_upsert",
+      "source": "embed_chunks",
+      "target": "upsert"
+    },
+    {
+      "id": "edge_upsert_summary",
+      "source": "upsert",
+      "target": "summary"
+    },
+    {
+      "id": "edge_summary_respond",
+      "source": "summary",
+      "target": "respond"
+    }
+  ]
+}

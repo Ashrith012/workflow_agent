@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "name": "Groq webhook summary",
+  "nodes": [
+    {
+      "id": "node_uAg6TM",
+      "type": "WebhookTrigger",
+      "position": {
+        "x": 80,
+        "y": 210
+      },
+      "parameters": {
+        "path": "/v1/test"
+      }
+    },
+    {
+      "id": "node_kLRw0x",
+      "type": "AIAgent",
+      "position": {
+        "x": 440,
+        "y": 210
+      },
+      "parameters": {
+        "model": "groq:openai/gpt-oss-20b",
+        "prompt": "Summarize: {{ $json.body.text }}",
+        "tools": ""
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_2A7wDN",
+      "source": "node_uAg6TM",
+      "target": "node_kLRw0x"
+    }
+  ]
+}

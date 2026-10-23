@@ -1,0 +1,172 @@
+{
+  "version": 1,
+  "name": "Manzil — Domain report (dashboard buttons)",
+  "nodes": [
+    {
+      "id": "domain_trigger",
+      "type": "UIEventTrigger",
+      "position": {
+        "x": 80,
+        "y": 120
+      },
+      "parameters": {
+        "eventKey": "manzil.domain",
+        "allowedRoles": "user, admin",
+        "samplePayload": "{\n  \"domain\": \"Material Status\",\n  \"projectId\": \"\",\n  \"dashboard\": \"true\"\n}"
+      }
+    },
+    {
+      "id": "as_request",
+      "type": "SetFields",
+      "position": {
+        "x": 400,
+        "y": 120
+      },
+      "parameters": {
+        "mode": "merge",
+        "values": "{\n  \"message\": \"{{ $json.domain }}\",\n  \"history\": [],\n  \"classification\": {\n    \"category\": \"{{ $json.domain }}\",\n    \"method\": \"button\",\n    \"flags\": {\n      \"dashboard\": \"{{ $json.dashboard }}\"\n    }\n  }\n}"
+      }
+    },
+    {
+      "id": "embed_query",
+      "type": "Embeddings",
+      "position": {
+        "x": 720,
+        "y": 120
+      },
+      "parameters": {
+        "model": "gemini:gemini-embedding-001",
+        "text": "{{ $json.classification.category }}: {{ $json.message }}",
+        "itemsField": "",
+        "textKey": "text",
+        "outputField": "vector"
+      }
+    },
+    {
+      "id": "qdrant_search",
+      "type": "QdrantSearch",
+      "position": {
+        "x": 1040,
+        "y": 120
+      },
+      "parameters": {
+        "operation": "search",
+        "collection": "project_documents",
+        "vectorField": "vector",
+        "topK": "12",
+        "filter": "{\n  \"project_id\": \"{{ $json.projectId }}\"\n}",
+        "scoreThreshold": "",
+        "textField": "text",
+        "facetKey": "",
+        "outputField": "chunks",
+        "onError": "fail"
+      }
+    },
+    {
+      "id": "sharepoint_mcp",
+      "type": "SharePointMCP",
+      "position": {
+        "x": 1360,
+        "y": 120
+      },
+      "parameters": {
+        "operation": "callTool",
+        "tool": "search_documents",
+        "arguments": "{\n  \"query\": \"{{ $json.classification.category }} {{ $json.message }}\"\n}",
+        "outputField": "sharepoint",
+        "onError": "continue"
+      }
+    },
+    {
+      "id": "report_agent",
+      "type": "AIAgent",
+      "position": {
+        "x": 80,
+        "y": 340
+      },
+      "parameters": {
+        "model": "groq:openai/gpt-oss-120b",
+        "tools": "",
+        "promptTemplates": "manzil_v2, manzil_ui_output",
+        "systemPrompt": "",
+        "prompt": "Requested domain: {{ $json.classification.category }}\nUser request: {{ $json.message }}\nProject ID filter: {{ $json.projectId }}",
+        "context": "Knowledge source chunks (cite by \"id\"):\n{{ $json.chunks }}\n\nSharePoint document metadata (versions, approvals):\n{{ $json.sharepoint }}",
+        "historyField": "history",
+        "responseFormat": "json",
+        "runIf": "",
+        "outputField": "report"
+      }
+    },
+    {
+      "id": "dashboard_agent",
+      "type": "AIAgent",
+      "position": {
+        "x": 400,
+        "y": 340
+      },
+      "parameters": {
+        "model": "groq:openai/gpt-oss-120b",
+        "tools": "",
+        "promptTemplates": "manzil_dashboard",
+        "systemPrompt": "",
+        "prompt": "Build the executive dashboard data for: {{ $json.classification.category }} — {{ $json.message }}",
+        "context": "Report:\n{{ $json.report }}\n\nKnowledge source chunks:\n{{ $json.chunks }}",
+        "historyField": "",
+        "responseFormat": "json",
+        "runIf": "{{ $json.classification.flags.dashboard }}",
+        "outputField": "dashboard"
+      }
+    },
+    {
+      "id": "respond",
+      "type": "RespondToUI",
+      "position": {
+        "x": 720,
+        "y": 340
+      },
+      "parameters": {
+        "title": "",
+        "blocksFrom": "dashboard, report",
+        "sourcesFrom": "chunks",
+        "emptyMessage": "Information not available in the connected knowledge source."
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_domain_trigger_as_request",
+      "source": "domain_trigger",
+      "target": "as_request"
+    },
+    {
+      "id": "edge_as_request_embed_query",
+      "source": "as_request",
+      "target": "embed_query"
+    },
+    {
+      "id": "edge_embed_query_qdrant_search",
+      "source": "embed_query",
+      "target": "qdrant_search"
+    },
+    {
+      "id": "edge_qdrant_search_sharepoint_mcp",
+      "source": "qdrant_search",
+      "target": "sharepoint_mcp"
+    },
+    {
+      "id": "edge_sharepoint_mcp_report_agent",
+      "source": "sharepoint_mcp",
+      "target": "report_agent"
+    },
+    {
+      "id": "edge_report_agent_dashboard_agent",
+      "source": "report_agent",
+      "target": "dashboard_agent"
+    },
+    {
+      "id": "edge_dashboard_agent_respond",
+      "source": "dashboard_agent",
+      "target": "respond"
+    }
+  ]
+}

@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Theme tokens (RGB triplets, consumed via tailwind.config.js). */
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --page: 11 13 16;
+  --panel: 20 23 28;
+  --line: 37 42 49;
+  --line-strong: 71 85 105;
+  --fg: 241 245 249;
+  --fg-soft: 203 213 225;
+  --muted: 148 163 184;
+  --subtle: 100 116 139;
+  --faint: 71 85 105;
+  --hover: 255 255 255;
+  --hover-alpha: 0.05;
+  --dots: 42 47 55;
+  --edge: 100 116 139;
+  --edge-selected: 226 232 240;
+  --controls-hover: 29 33 40;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --page: 246 247 249;
+  --panel: 255 255 255;
+  --line: 226 230 235;
+  --line-strong: 148 163 184;
+  --fg: 15 23 42;
+  --fg-soft: 51 65 85;
+  --muted: 71 85 105;
+  --subtle: 100 116 139;
+  --faint: 148 163 184;
+  --hover: 15 23 42;
+  --hover-alpha: 0.04;
+  --dots: 203 208 216;
+  --edge: 148 163 184;
+  --edge-selected: 15 23 42;
+  --controls-hover: 241 245 249;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: rgb(var(--page));
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* React Flow theme tuning — both colour modes read the same tokens. */
+.react-flow.dark,
+.react-flow.light {
+  --xy-background-color: rgb(var(--page));
+  --xy-background-pattern-dots-color-default: rgb(var(--dots));
+  --xy-edge-stroke: rgb(var(--edge));
+  --xy-edge-stroke-selected: rgb(var(--edge-selected));
+  --xy-connectionline-stroke: rgb(var(--muted));
+  --xy-minimap-background-color: rgb(var(--panel));
+  --xy-minimap-mask-background-color-default: rgb(var(--page) / 0.7);
+  --xy-controls-button-background-color: rgb(var(--panel));
+  --xy-controls-button-background-color-hover: rgb(var(--controls-hover));
+  --xy-controls-button-border-color: rgb(var(--line));
+  --xy-controls-button-color: rgb(var(--fg-soft));
+}
+
+/* Our custom node supplies its own chrome. */
+.react-flow__node {
+  border-radius: 0.5rem;
+}
+
+/* Content that always renders in the light corporate theme (the executive dashboard and its exports). */
+[data-theme-scope='light'] {
+  color-scheme: light;
+  --page: 246 247 249;
+  --panel: 255 255 255;
+  --line: 226 230 235;
+  --line-strong: 148 163 184;
+  --fg: 15 23 42;
+  --fg-soft: 51 65 85;
+  --muted: 71 85 105;
+  --subtle: 100 116 139;
+  --faint: 148 163 184;
+  --hover: 15 23 42;
+  --hover-alpha: 0.04;
+}
