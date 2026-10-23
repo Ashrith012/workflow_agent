@@ -31,7 +31,7 @@ Required in `.env`:
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Creates the first administrator on start, when no users exist |
 | `JWT_SECRET` | Signs session cookies (required in production) |
 | `DATABASE_URL` | PostgreSQL. Blank uses embedded PGlite in `.data/pglite`, which is for development only |
-| `GEMINI_API_KEY` | Embeddings (`gemini-embedding-001`) and the Gemini chat models |
+| `GEMINI_API_KEY` | Embeddings (`gemini-embedding-2`) and the Gemini chat models |
 | `GROQ_API_KEY` | The report and dashboard agents (`groq:openai/gpt-oss-120b`); switch them to a Gemini model to need only one key |
 | `QDRANT_URL`, `QDRANT_API_KEY` | Vector store |
 | `SHAREPOINT_*` | Graph connector (ingestion) |
@@ -45,7 +45,7 @@ Required in `.env`:
 2. For each template under **Manzil templates**, click **Open in builder**. Check these settings, then test-run it with **Run** (Mock first, then Live):
    - **Qdrant collection** (`project_documents` in the templates). Set it to your collection. The search reads the chunk text from the `text` payload field (or `page_content`) and reads `project_id`, `doc_name`, `url`, `version` and `modified` for filtering and citations.
    - **SharePoint MCP tool name** (`search_documents` in the templates). Click Run with operation `listTools` to see your server's tools.
-   - **Models.** The report and dashboard use `groq:openai/gpt-oss-120b` and embeddings use `gemini:gemini-embedding-001`. The embedding model must match the model your Qdrant collection was built with.
+   - **Models.** The report and dashboard use `groq:openai/gpt-oss-120b` and embeddings use `gemini:gemini-embedding-2`. The embedding model must match the model your Qdrant collection was built with.
 3. Publish each workflow, either with **Publish** next to its template or with **Publish canvas** after editing it.
 4. Create end users under **Users**.
 

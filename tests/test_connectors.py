@@ -62,7 +62,7 @@ def test_prompts_endpoint_lists_templates():
 
 def test_embeddings_mock_is_deterministic_and_sized():
     body = client.post("/embeddings", json={"texts": ["a", "b", "a"], "live": False}).json()
-    assert body["model"] == "gemini:gemini-embedding-001" and body["dimensions"] == 3072
+    assert body["model"] == "gemini:gemini-embedding-2" and body["dimensions"] == 3072
     assert len(body["vectors"]) == 3 and len(body["vectors"][0]) == 3072
     assert body["vectors"][0] == body["vectors"][2] != body["vectors"][1]
 
