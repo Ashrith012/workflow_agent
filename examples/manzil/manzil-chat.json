@@ -57,7 +57,7 @@
         "operation": "search",
         "collection": "project_documents",
         "vectorField": "vector",
-        "topK": "12",
+        "topK": "4",
         "filter": "{\n  \"project_id\": \"{{ $json.projectId }}\"\n}",
         "scoreThreshold": "",
         "textField": "text",
@@ -98,7 +98,10 @@
         "historyField": "history",
         "responseFormat": "json",
         "runIf": "",
-        "outputField": "report"
+        "outputField": "report",
+        "maxTokens": "1800",
+        "maxInputTokens": "6000",
+        "reasoningEffort": "low"
       }
     },
     {
@@ -114,11 +117,14 @@
         "promptTemplates": "manzil_dashboard",
         "systemPrompt": "",
         "prompt": "Build the executive dashboard data for: {{ $json.classification.category }} — {{ $json.message }}",
-        "context": "Report:\n{{ $json.report }}\n\nKnowledge source chunks:\n{{ $json.chunks }}",
+        "context": "Report:\n{{ $json.report }}",
         "historyField": "",
         "responseFormat": "json",
         "runIf": "{{ $json.classification.flags.dashboard }}",
-        "outputField": "dashboard"
+        "outputField": "dashboard",
+        "maxTokens": "1500",
+        "maxInputTokens": "4000",
+        "reasoningEffort": "low"
       }
     },
     {

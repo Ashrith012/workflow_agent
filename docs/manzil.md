@@ -59,6 +59,8 @@ Required in `.env`:
 | `manzil-analytics.json` | `manzil.analytics` | Request counts, success rate and latency |
 | `manzil-ingest.json` | `manzil.ingest` (admin only) | SharePoint folder → parse PDF/DOCX/XLSX → chunk → embed → upsert into Qdrant |
 
+**Groq free tier.** `openai/gpt-oss-120b` on Groq's free tier allows 8,000 tokens per minute, counting the input *and* the requested output. The templates therefore retrieve 4 chunks and set three AI Agent options: **Max input tokens** (the agent service drops the oldest chat turns, then cuts the end of the context, so the system prompt and request always fit), **Max output tokens**, and **Reasoning effort** `low`. When the report and dashboard agents run in the same minute, a rate-limited call waits for Groq's `retry-after` (up to 30 s) and is retried once. With a higher Groq tier or another provider, raise or clear these values.
+
 To ingest a project, open `manzil-ingest.json` in the builder. Set its trigger's sample payload, for example `{"path": "Projects/PRJ-001", "projectId": "PRJ-001"}`, and click **Run** (Live). Scanned PDFs and images are skipped and listed, because there is no OCR.
 
 ## How the instructions map onto workflows

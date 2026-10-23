@@ -52,3 +52,38 @@ def test_execute_live_without_api_key_is_rejected(monkeypatch):
     response = client.post("/agent/execute", json={"provider": "groq", "prompt": "Hi"})
     assert response.status_code == 400
     assert "GROQ_API_KEY is not set" in response.json()["detail"]
+
+
+def test_build_messages_fits_input_budget_history_first():
+    from src.main import ExecuteRequest, build_messages, estimate_tokens
+
+    payload = ExecuteRequest(
+        prompt="Material Status",
+        system_prompt="You are Manzil.",
+        context="chunk " * 2000,
+        history=[{"role": "user", "content": "old " * 500}, {"role": "assistant", "content": "older reply " * 500}],
+        max_input_tokens=1500,
+    )
+    messages = build_messages(payload)
+    assert [m["role"] for m in messages] == ["system", "user"]  # history dropped before context is cut
+    assert messages[0]["content"] == "You are Manzil."
+    assert messages[-1]["content"].endswith("Request:\nMaterial Status")
+    assert "[context truncated to fit the model's limit]" in messages[-1]["content"]
+    assert sum(estimate_tokens(m["content"]) for m in messages) <= 1500
+
+
+def test_build_messages_without_budget_keeps_everything():
+    from src.main import ExecuteRequest, build_messages
+
+    payload = ExecuteRequest(prompt="Hi", context="ctx", history=[{"role": "user", "content": "earlier"}])
+    messages = build_messages(payload)
+    assert [m["role"] for m in messages] == ["system", "user", "user"]
+    assert "truncated" not in messages[-1]["content"]
+
+
+def test_execute_mock_mode_accepts_limits():
+    response = client.post(
+        "/agent/execute",
+        json={"provider": "groq", "prompt": "Hi", "live": False, "max_tokens": 1800, "max_input_tokens": 6000, "reasoning_effort": "low"},
+    )
+    assert response.status_code == 200

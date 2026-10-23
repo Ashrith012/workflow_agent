@@ -1,6 +1,8 @@
 """FastAPI entry point: `uvicorn src.main:app --reload --port 8000` from the project root."""
+import asyncio
 import json
 import logging
+import math
 import os
 import re
 from pathlib import Path
@@ -98,6 +100,13 @@ class ExecuteRequest(BaseModel):
     context: str = Field(default="", description="Retrieved context (e.g. Qdrant chunks) given to the model with the prompt")
     history: List[Dict[str, str]] = Field(default_factory=list, description="Earlier turns: [{role: user|assistant, content}]")
     response_format: Literal["text", "json"] = Field(default="text", description="json asks for and parses a JSON object")
+    max_tokens: Optional[int] = Field(default=None, ge=1, description="Cap on the reply length, in tokens")
+    max_input_tokens: Optional[int] = Field(
+        default=None, ge=1, description="Estimated input budget; oldest history turns are dropped first, then the context is cut"
+    )
+    reasoning_effort: Optional[Literal["low", "medium", "high"]] = Field(
+        default=None, description="For reasoning models on providers that support it (see models.json)"
+    )
 
 
 class ExecuteResponse(BaseModel):
@@ -130,23 +139,46 @@ def resolve_model(provider: Optional[str], model: Optional[str]) -> tuple[str, s
     return provider, model or spec["models"][0]["id"]
 
 
+CHARS_PER_TOKEN = 3.5  # deliberately low, so the estimate errs towards fewer tokens sent
+TRUNCATED_NOTE = "\n[context truncated to fit the model's limit]"
+
+
+def estimate_tokens(text: str) -> int:
+    return math.ceil(len(text) / CHARS_PER_TOKEN)
+
+
 def build_messages(payload: "ExecuteRequest") -> List[Dict[str, str]]:
     system = "\n\n".join(
         part for part in (load_prompt_templates(payload.prompt_templates), payload.system_prompt.strip()) if part
     ) or DEFAULT_SYSTEM_PROMPT
     if payload.response_format == "json":
         system += "\n\nRespond with a single JSON object only, no prose or code fences."
-    messages = [{"role": "system", "content": system}]
-    messages += [
+    history = [
         {"role": turn["role"], "content": turn.get("content", "")}
         for turn in payload.history
         if turn.get("role") in ("user", "assistant")
     ]
-    user = payload.prompt
-    if payload.context.strip():
-        user = f"Retrieved knowledge source context:\n{payload.context}\n\nRequest:\n{payload.prompt}"
-    messages.append({"role": "user", "content": user})
-    return messages
+    context = payload.context
+
+    def user_message() -> str:
+        if not context.strip():
+            return payload.prompt
+        return f"Retrieved knowledge source context:\n{context}\n\nRequest:\n{payload.prompt}"
+
+    # Fit the input budget: the system prompt and the request are kept whole; the oldest
+    # history goes first, then the end of the context.
+    if payload.max_input_tokens:
+        def total() -> int:
+            return sum(estimate_tokens(t) for t in (system, user_message(), *(h["content"] for h in history)))
+
+        while history and total() > payload.max_input_tokens:
+            history.pop(0)
+        over = total() - payload.max_input_tokens
+        if over > 0 and context:
+            keep = max(0, len(context) - math.ceil(over * CHARS_PER_TOKEN) - len(TRUNCATED_NOTE))
+            context = context[:keep] + TRUNCATED_NOTE
+
+    return [{"role": "system", "content": system}, *history, {"role": "user", "content": user_message()}]
 
 
 def parse_json_reply(text: str) -> Any:
@@ -164,18 +196,52 @@ def parse_json_reply(text: str) -> Any:
     raise HTTPException(status_code=502, detail=f"The model did not return valid JSON: {text[:300]}")
 
 
-async def chat(provider: str, api_key: str, model: str, messages: List[Dict[str, str]], json_mode: bool = False) -> str:
-    from openai import AsyncOpenAI
+MAX_RATE_LIMIT_WAIT_S = 30.0
 
+
+def retry_after_seconds(err: Exception) -> float:
+    """Seconds the provider asks us to wait after a 429 (retry-after header), capped."""
+    headers = getattr(getattr(err, "response", None), "headers", None) or {}
+    try:
+        wait = float(headers.get("retry-after", 5))
+    except (TypeError, ValueError):
+        wait = 5.0
+    return min(max(wait, 0.0), MAX_RATE_LIMIT_WAIT_S)
+
+
+async def chat(
+    provider: str,
+    api_key: str,
+    model: str,
+    messages: List[Dict[str, str]],
+    json_mode: bool = False,
+    max_tokens: Optional[int] = None,
+    reasoning_effort: Optional[str] = None,
+) -> str:
+    from openai import AsyncOpenAI, RateLimitError
+
+    spec = PROVIDERS[provider]
     # Every catalog provider speaks the OpenAI chat-completions API at its own base_url.
-    client = AsyncOpenAI(api_key=api_key, base_url=PROVIDERS[provider]["base_url"], timeout=TIMEOUT_S)
+    client = AsyncOpenAI(api_key=api_key, base_url=spec["base_url"], timeout=TIMEOUT_S)
     kwargs: Dict[str, Any] = {}
     if "temperature" in AGENT_CONFIG:
         kwargs["temperature"] = AGENT_CONFIG["temperature"]
     # Providers without OpenAI's json_object mode rely on the system prompt's JSON instruction + parse_json_reply.
-    if json_mode and PROVIDERS[provider].get("json_object_mode", True):
+    if json_mode and spec.get("json_object_mode", True):
         kwargs["response_format"] = {"type": "json_object"}
-    response = await client.chat.completions.create(model=model, messages=messages, **kwargs)
+    if max_tokens:
+        kwargs["max_tokens"] = max_tokens
+    if reasoning_effort and spec.get("reasoning_effort", False):
+        kwargs["reasoning_effort"] = reasoning_effort
+    try:
+        response = await client.chat.completions.create(model=model, messages=messages, **kwargs)
+    except RateLimitError as err:
+        # A full per-minute window (429) clears on its own; wait once. A request that is
+        # too large on its own (413) is a different error and is not retried.
+        wait = retry_after_seconds(err)
+        logger.info("%s rate limited; retrying in %.1fs", spec["label"], wait)
+        await asyncio.sleep(wait)
+        response = await client.chat.completions.create(model=model, messages=messages, **kwargs)
     return response.choices[0].message.content or ""
 
 
@@ -223,7 +289,15 @@ async def execute_agent(payload: ExecuteRequest):
 
     json_mode = payload.response_format == "json"
     try:
-        text = await chat(provider, api_key, model, messages, json_mode=json_mode)
+        text = await chat(
+            provider,
+            api_key,
+            model,
+            messages,
+            json_mode=json_mode,
+            max_tokens=payload.max_tokens,
+            reasoning_effort=payload.reasoning_effort,
+        )
     except Exception as err:
         logger.warning("%s call with model %s failed: %s", spec["label"], model, err)
         raise HTTPException(status_code=502, detail=f"{spec['label']} API error: {err}")

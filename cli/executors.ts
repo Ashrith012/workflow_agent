@@ -51,6 +51,9 @@ export const executors: Record<string, Executor> = {
           context: interpolate(params.context ?? '', input, ctx.warn),
           history: params.historyField ? readHistory(input, params.historyField) : [],
           response_format: responseFormat,
+          max_tokens: positiveInt(params.maxTokens),
+          max_input_tokens: positiveInt(params.maxInputTokens),
+          reasoning_effort: params.reasoningEffort || undefined,
         },
         ctx,
       );
@@ -90,6 +93,12 @@ export const executors: Record<string, Executor> = {
   ...aiExecutors,
   ...appExecutors,
 };
+
+/** A positive whole number from a text param; blank or invalid means "not set". */
+function positiveInt(value: string | undefined): number | undefined {
+  const n = Number((value ?? '').trim());
+  return Number.isInteger(n) && n > 0 ? n : undefined;
+}
 
 /** Chat turns at `field` ([{role, content}]); anything else is ignored. */
 function readHistory(input: unknown, field: string): { role: string; content: string }[] {

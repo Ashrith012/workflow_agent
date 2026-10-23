@@ -97,7 +97,7 @@
       },
       "parameters": {
         "title": "",
-        "blocksFrom": "hero, kpis, actionsIntro, dashboardToggle, actions, feed, status",
+        "blocksFrom": "hero, kpis, actionsIntro, dashboardToggle, actions, feed, status[1]",
         "sourcesFrom": "",
         "emptyMessage": ""
       }

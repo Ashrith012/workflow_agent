@@ -5,6 +5,7 @@
       "label": "Groq",
       "base_url": "https://api.groq.com/openai/v1",
       "api_key_env": "GROQ_API_KEY",
+      "reasoning_effort": true,
       "models": [
         { "id": "openai/gpt-oss-20b", "label": "GPT-OSS 20B" },
         { "id": "openai/gpt-oss-120b", "label": "GPT-OSS 120B" },
