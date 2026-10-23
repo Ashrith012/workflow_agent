@@ -12,7 +12,7 @@
       "parameters": {
         "eventKey": "manzil.ingest",
         "allowedRoles": "admin",
-        "samplePayload": "{\n  \"path\": \"Projects/PRJ-001\",\n  \"projectId\": \"PRJ-001\"\n}"
+        "samplePayload": "{\n  \"path\": \"Knowledge Docx - Manzil/Hubli\",\n  \"projectId\": \"Hubli\"\n}"
       }
     },
     {
@@ -25,7 +25,7 @@
       "parameters": {
         "operation": "getFolderFiles",
         "siteUrl": "",
-        "library": "",
+        "library": "ProjectExecution",
         "path": "{{ $json.path }}",
         "listName": "",
         "content": "",

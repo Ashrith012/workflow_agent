@@ -58,7 +58,7 @@ Required in `.env`:
 | `manzil-analytics.json` | `manzil.analytics` | Request counts, success rate and latency |
 | `manzil-ingest.json` | `manzil.ingest` (admin only) | SharePoint folder → parse PDF/DOCX/XLSX → chunk → embed → upsert into Qdrant |
 
-To ingest a project, open `manzil-ingest.json` in the builder. Set its trigger's sample payload, for example `{"path": "Projects/PRJ-001", "projectId": "PRJ-001"}`, and click **Run** (Live). Scanned PDFs and images are skipped and listed, because there is no OCR.
+To ingest a project, open `manzil-ingest.json` in the builder. Set its trigger's sample payload, for example `{"path": "Knowledge Docx - Manzil/Hubli", "projectId": "Hubli"}`, and click **Run** (Live). The path is a folder inside the SharePoint node's **Library** (`ProjectExecution`); one project folder sits under `Knowledge Docx - Manzil` for each project. Scanned PDFs and images are skipped and listed, because there is no OCR.
 
 ## How the instructions map onto workflows
 
