@@ -3,7 +3,7 @@
  * Nodes that connect workflows to the end-user app: UI/chat triggers, field
  * mapping, the RespondToUI terminal node and the platform history/stats nodes.
  */
-import { isPlainObject, mergeOutput, type ExecutionContext, type Executor } from './node-runtime.js';
+import { isPlainObject, mergeOutput, pingAgentService, type ExecutionContext, type Executor } from './node-runtime.js';
 import { interpolate, interpolateJson, readPath } from './interpolate.js';
 
 export const NO_CITATION_TEXT = 'No supporting citation was returned by the knowledge source.';
@@ -90,6 +90,15 @@ const MOCK_STATS = {
   byDay: [{ day: '2026-10-19', total: 18 }, { day: '2026-10-20', total: 24 }],
 };
 
+const MOCK_STATUS = {
+  running: 1, runs24h: 24, failed24h: 1, lastRunAt: '2026-10-20T09:15:00Z',
+  published: [
+    { event_key: 'manzil.overview', name: 'Manzil — Overview', version: 1 },
+    { event_key: 'manzil.domain', name: 'Manzil — Domain report', version: 3 },
+    { event_key: 'manzil.chat', name: 'Manzil — Chat', version: 2 },
+  ],
+};
+
 function requireServices(ctx: ExecutionContext, node: string) {
   if (ctx.services) return ctx.services;
   if (!ctx.live) return undefined; // mock data below
@@ -139,6 +148,21 @@ export const appExecutors: Record<string, Executor> = {
     const all = params.scope === 'all' && ctx.user?.role === 'admin';
     const limit = Number(params.limit) > 0 ? Math.min(Number(params.limit), 500) : 50;
     const runs = services ? await services.runHistory({ userId: all ? undefined : ctx.user?.id, limit }) : MOCK_RUNS;
+    if (params.layout === 'feed') {
+      const feed = {
+        type: 'activityFeed',
+        title: params.title || 'AI Activity',
+        items: runs.map((r: any) => ({
+          title: r.label || r.workflow_name || r.event_key,
+          detail: r.workflow_name ?? r.event_key,
+          status: r.status === 'completed' ? 'Completed' : r.status === 'failed' ? 'Failed' : 'In Progress',
+          at: new Date(r.started_at).toISOString(),
+          duration: formatMs(r.duration_ms),
+          ...(all ? { user: r.user_email ?? '' } : {}),
+        })),
+      };
+      return mergeOutput(input, params.outputField || 'activity', feed);
+    }
     const columns = ['When', 'Action', 'Status', 'Duration', ...(all ? ['User'] : [])];
     const block = {
       type: 'table',
@@ -163,17 +187,20 @@ export const appExecutors: Record<string, Executor> = {
     const days = Number(params.days) > 0 ? Math.min(Number(params.days), 365) : 30;
     const s: any = services ? await services.runStats({ userId: all ? undefined : ctx.user?.id, days }) : MOCK_STATS;
     const successRate = s.total ? `${Math.round((s.completed / s.total) * 100)}%` : '—';
+    const trend = s.byDay.map((d: any) => d.total);
+    const kpis = {
+      type: 'kpiCards',
+      title: `Last ${days} days`,
+      cards: [
+        { title: 'AI requests', value: String(s.total), description: `${s.failed} failed`, tone: 'blue', icon: 'activity', trend },
+        { title: 'Success rate', value: successRate, description: 'Completed runs', tone: 'green', icon: 'check' },
+        { title: 'Avg response time', value: formatMs(s.avgMs), description: 'End-to-end', tone: 'orange', icon: 'clock' },
+        ...(all ? [{ title: 'Active users', value: String(s.users), description: 'Distinct users', tone: 'grey', icon: 'users' }] : []),
+      ],
+    };
+    if (params.layout === 'kpis') return mergeOutput(input, params.outputField || 'analytics', kpis);
     const blocks = [
-      {
-        type: 'kpiCards',
-        title: `Last ${days} days`,
-        cards: [
-          { title: 'AI requests', value: String(s.total), description: `${s.failed} failed`, tone: 'blue' },
-          { title: 'Success rate', value: successRate, description: 'Completed runs', tone: 'green' },
-          { title: 'Avg response time', value: formatMs(s.avgMs), description: 'End-to-end', tone: 'orange' },
-          ...(all ? [{ title: 'Active users', value: String(s.users), description: 'Distinct users', tone: 'grey' }] : []),
-        ],
-      },
+      kpis,
       { type: 'barChart', title: 'Requests per day', labels: s.byDay.map((d: any) => d.day), values: s.byDay.map((d: any) => d.total) },
       {
         type: 'table',
@@ -183,5 +210,35 @@ export const appExecutors: Record<string, Executor> = {
       },
     ];
     return mergeOutput(input, params.outputField || 'analytics', blocks);
+  },
+
+  PlatformStatus: async (input, params, ctx) => {
+    const services = requireServices(ctx, 'PlatformStatus');
+    const [s, agent]: [any, Awaited<ReturnType<typeof pingAgentService>>] = await Promise.all([
+      services ? services.platformStatus({ role: ctx.user?.role ?? 'user' }) : MOCK_STATUS,
+      ctx.live || services ? pingAgentService(ctx) : { ok: true, ms: 12 },
+    ]);
+    const published: any[] = s.published ?? [];
+    const lastRun = s.lastRunAt ? new Date(s.lastRunAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : 'No runs yet';
+    const blocks = [
+      {
+        type: 'statusList',
+        title: params.title || 'System status',
+        items: [
+          { label: 'Workflow engine', status: 'ok', detail: `${published.length} workflow(s) live` },
+          { label: 'AI agent service', status: agent.ok ? 'ok' : 'down', detail: agent.ok ? `Responding in ${agent.ms} ms` : 'Unreachable' },
+          { label: 'Run mode', status: ctx.live ? 'ok' : 'warn', detail: ctx.live ? 'Live models and connectors' : 'Mock (demo data)' },
+          { label: 'Runs in progress', status: 'ok', detail: `${s.running ?? 0} now · ${s.runs24h ?? 0} in 24 h` },
+          { label: 'Failures (24 h)', status: s.failed24h > 0 ? 'warn' : 'ok', detail: s.failed24h > 0 ? `${s.failed24h} failed run(s)` : 'None' },
+          { label: 'Last activity', status: 'ok', detail: lastRun },
+        ],
+      },
+      {
+        type: 'statusList',
+        title: 'Live workflows',
+        items: published.map((p) => ({ label: p.name, status: 'ok', detail: `${p.event_key} · v${p.version}` })),
+      },
+    ];
+    return mergeOutput(input, params.outputField || 'status', blocks);
   },
 };

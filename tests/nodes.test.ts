@@ -114,10 +114,38 @@ test('RunHistory only shows all users to admins', async () => {
   const services = {
     runHistory: async (o: unknown) => (calls.push(o), [{ id: 'r', event_key: 'e', status: 'completed', duration_ms: 1000, started_at: '2026-10-01T00:00:00Z' }]),
     runStats: async () => ({}),
+    platformStatus: async () => ({}),
   };
   await executors.RunHistory({}, { scope: 'all' }, ctx({ services, user: { id: 'u1', email: 'u@x', role: 'user' } }));
   await executors.RunHistory({}, { scope: 'all' }, ctx({ services, user: { id: 'a1', email: 'a@x', role: 'admin' } }));
   assert.deepEqual(calls, [{ userId: 'u1', limit: 50 }, { userId: undefined, limit: 50 }]);
+});
+
+test('RunHistory feed layout and RunStats kpis layout', async () => {
+  const { activity } = await executors.RunHistory({}, { layout: 'feed', title: 'Live' }, ctx());
+  assert.equal(activity.type, 'activityFeed');
+  assert.deepEqual(activity.items[1], { title: 'Manzil — Chat', detail: 'Manzil — Chat', status: 'Failed', at: '2026-10-20T09:02:00.000Z', duration: '1.2 s' });
+
+  const { analytics } = await executors.RunStats({}, { layout: 'kpis' }, ctx());
+  assert.equal(analytics.type, 'kpiCards');
+  assert.deepEqual(analytics.cards[0].trend, [18, 24]);
+});
+
+test('PlatformStatus reports health and the workflows the role can run', async () => {
+  const roles: string[] = [];
+  const services = {
+    runHistory: async () => [],
+    runStats: async () => ({}),
+    platformStatus: async ({ role }: { role: string }) => (
+      roles.push(role), { running: 0, runs24h: 3, failed24h: 2, lastRunAt: null, published: [{ event_key: 'a.b', name: 'A', version: 2 }] }
+    ),
+  };
+  const { status } = await executors.PlatformStatus({}, {}, ctx({ services, user: { id: 'u1', email: 'u@x', role: 'user' } }));
+  assert.deepEqual(roles, ['user']);
+  const [health, workflows] = status;
+  assert.equal(health.type, 'statusList');
+  assert.equal(health.items.find((i: { label: string }) => i.label === 'Failures (24 h)').status, 'warn');
+  assert.deepEqual(workflows.items, [{ label: 'A', status: 'ok', detail: 'a.b · v2' }]);
 });
 
 test('UIEventTrigger returns the event payload, else the sample payload', async () => {

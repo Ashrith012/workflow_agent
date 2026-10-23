@@ -30,5 +30,10 @@ export function useEvent() {
     }
   }, []);
 
-  return { state, fire };
+  const reset = useCallback(() => {
+    latest.current++;
+    setState({ phase: 'idle' });
+  }, []);
+
+  return { state, fire, reset };
 }

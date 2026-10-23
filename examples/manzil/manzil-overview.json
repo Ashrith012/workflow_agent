@@ -1,0 +1,138 @@
+{
+  "version": 1,
+  "name": "Manzil — Overview",
+  "nodes": [
+    {
+      "id": "overview_trigger",
+      "type": "UIEventTrigger",
+      "position": {
+        "x": 80,
+        "y": 120
+      },
+      "parameters": {
+        "eventKey": "manzil.overview",
+        "allowedRoles": "user, admin",
+        "samplePayload": "{ \"user\": { \"id\": \"u_sample\", \"email\": \"user@example.com\", \"role\": \"user\" } }"
+      }
+    },
+    {
+      "id": "kpis",
+      "type": "RunStats",
+      "position": {
+        "x": 380,
+        "y": 120
+      },
+      "parameters": {
+        "scope": "all",
+        "days": "30",
+        "layout": "kpis",
+        "outputField": "kpis"
+      }
+    },
+    {
+      "id": "feed",
+      "type": "RunHistory",
+      "position": {
+        "x": 680,
+        "y": 120
+      },
+      "parameters": {
+        "scope": "all",
+        "limit": "8",
+        "title": "Live activity",
+        "layout": "feed",
+        "outputField": "feed"
+      }
+    },
+    {
+      "id": "projects",
+      "type": "QdrantSearch",
+      "position": {
+        "x": 980,
+        "y": 120
+      },
+      "parameters": {
+        "operation": "facet",
+        "collection": "project_documents",
+        "vectorField": "",
+        "topK": "200",
+        "filter": "",
+        "scoreThreshold": "",
+        "textField": "text",
+        "facetKey": "project_id",
+        "outputField": "projects",
+        "onError": "continue"
+      }
+    },
+    {
+      "id": "status",
+      "type": "PlatformStatus",
+      "position": {
+        "x": 1280,
+        "y": 120
+      },
+      "parameters": {
+        "title": "System status",
+        "outputField": "status"
+      }
+    },
+    {
+      "id": "compose",
+      "type": "SetFields",
+      "position": {
+        "x": 1580,
+        "y": 120
+      },
+      "parameters": {
+        "mode": "merge",
+        "values": "{\n  \"hero\": {\n    \"type\": \"hero\",\n    \"eyebrow\": \"Manzil · Project Execution Validation\",\n    \"title\": \"Welcome back\",\n    \"user\": \"{{ $json.user.email }}\",\n    \"subtitle\": \"Live status of your AI workflows, the knowledge base and every report the assistant generates. Every number on this page comes from a published workflow.\"\n  },\n  \"actionsIntro\": {\n    \"type\": \"select\",\n    \"name\": \"projectId\",\n    \"label\": \"Project\",\n    \"placeholder\": \"All projects\",\n    \"options\": {{ $json.projects }}\n  },\n  \"dashboardToggle\": {\n    \"type\": \"toggle\",\n    \"name\": \"dashboard\",\n    \"label\": \"Include executive dashboard\"\n  },\n  \"actions\": {\n    \"type\": \"buttonGroup\",\n    \"title\": \"Quick actions\",\n    \"description\": \"Each action runs its workflow and shows the result here.\",\n    \"buttons\": [\n      {\n        \"label\": \"Project Summary\",\n        \"icon\": \"briefcase\",\n        \"description\": \"Overall health, scope and key dates\",\n        \"eventKey\": \"manzil.domain\",\n        \"payload\": {\n          \"domain\": \"Project Summary\"\n        }\n      },\n      {\n        \"label\": \"Execution Progress\",\n        \"icon\": \"trending\",\n        \"description\": \"Planned vs actual progress\",\n        \"eventKey\": \"manzil.domain\",\n        \"payload\": {\n          \"domain\": \"Execution Progress\"\n        }\n      },\n      {\n        \"label\": \"Material Status\",\n        \"icon\": \"package\",\n        \"description\": \"Deliveries, shortages and approvals\",\n        \"eventKey\": \"manzil.domain\",\n        \"payload\": {\n          \"domain\": \"Material Status\"\n        }\n      },\n      {\n        \"label\": \"Inspection Status\",\n        \"icon\": \"search\",\n        \"description\": \"Pending and failed inspections\",\n        \"eventKey\": \"manzil.domain\",\n        \"payload\": {\n          \"domain\": \"Inspection Status\"\n        }\n      },\n      {\n        \"label\": \"Sign-Off Status\",\n        \"icon\": \"signature\",\n        \"description\": \"Approvals awaiting sign-off\",\n        \"eventKey\": \"manzil.domain\",\n        \"payload\": {\n          \"domain\": \"Sign-Off Status\"\n        }\n      },\n      {\n        \"label\": \"Call Letter Status\",\n        \"icon\": \"mail\",\n        \"description\": \"Issued and pending call letters\",\n        \"eventKey\": \"manzil.domain\",\n        \"payload\": {\n          \"domain\": \"Call Letter Status\"\n        }\n      },\n      {\n        \"label\": \"Work Completion\",\n        \"icon\": \"check\",\n        \"description\": \"Completed work packages\",\n        \"eventKey\": \"manzil.domain\",\n        \"payload\": {\n          \"domain\": \"Work Completion\"\n        }\n      },\n      {\n        \"label\": \"Ask the AI\",\n        \"icon\": \"chat\",\n        \"description\": \"Open a conversation with Manzil\",\n        \"to\": \"/app/chat\"\n      }\n    ]\n  }\n}"
+      }
+    },
+    {
+      "id": "respond",
+      "type": "RespondToUI",
+      "position": {
+        "x": 1880,
+        "y": 120
+      },
+      "parameters": {
+        "title": "",
+        "blocksFrom": "hero, kpis, actionsIntro, dashboardToggle, actions, feed, status",
+        "sourcesFrom": "",
+        "emptyMessage": ""
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_overview_trigger_kpis",
+      "source": "overview_trigger",
+      "target": "kpis"
+    },
+    {
+      "id": "edge_kpis_feed",
+      "source": "kpis",
+      "target": "feed"
+    },
+    {
+      "id": "edge_feed_projects",
+      "source": "feed",
+      "target": "projects"
+    },
+    {
+      "id": "edge_projects_status",
+      "source": "projects",
+      "target": "status"
+    },
+    {
+      "id": "edge_status_compose",
+      "source": "status",
+      "target": "compose"
+    },
+    {
+      "id": "edge_compose_respond",
+      "source": "compose",
+      "target": "respond"
+    }
+  ]
+}

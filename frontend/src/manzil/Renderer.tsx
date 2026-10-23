@@ -1,7 +1,9 @@
-import { CircleCheck, CircleDashed, CircleHelp, CircleX, ExternalLink, type LucideIcon } from 'lucide-react';
+import { ArrowRight, CircleCheck, CircleDashed, CircleHelp, CircleX, ExternalLink, Gauge, Workflow, type LucideIcon } from 'lucide-react';
 import { createContext, useContext, type ReactNode } from 'react';
-import { BarChart } from './charts';
+import { useNavigate } from 'react-router-dom';
+import { BarChart, Sparkline } from './charts';
 import { ExecutiveDashboard } from './ExecutiveDashboard';
+import { blockIcon } from './icons';
 import { Markdown } from './Markdown';
 import type { Block, FormState, Source, UiResponse } from './types';
 
@@ -95,10 +97,15 @@ export function PriorityPill({ value }: { value: string }) {
 
 const str = (v: unknown) => (v === null || v === undefined ? '' : typeof v === 'string' ? v : JSON.stringify(v));
 
-function BlockFrame({ title, children }: { title?: string; children: ReactNode }) {
+function BlockFrame({ title, description, children }: { title?: string; description?: unknown; children: ReactNode }) {
   return (
     <section className="space-y-2">
-      {title && <h3 className="text-sm font-semibold text-fg">{title}</h3>}
+      {title && (
+        <div>
+          <h3 className="text-sm font-semibold text-fg">{title}</h3>
+          {description ? <p className="text-xs text-subtle">{str(description)}</p> : null}
+        </div>
+      )}
       {children}
     </section>
   );
@@ -178,27 +185,136 @@ function TableBlock({ block }: { block: Block }) {
   );
 }
 
-const TONE_ACCENT: Record<string, string> = {
-  blue: 'border-l-[#2a78d6]',
-  green: 'border-l-[#0ca30c]',
-  orange: 'border-l-[#ec835a]',
-  red: 'border-l-[#d03b3b]',
-  grey: 'border-l-[#898781]',
+/** Icon chip + sparkline colour per KPI tone. */
+const TONE: Record<string, { chip: string; ink: string }> = {
+  blue: { chip: 'bg-sky-500/12 text-sky-600 dark:text-sky-300', ink: 'text-sky-500' },
+  green: { chip: 'bg-emerald-500/12 text-emerald-600 dark:text-emerald-300', ink: 'text-emerald-500' },
+  orange: { chip: 'bg-orange-500/12 text-orange-600 dark:text-orange-300', ink: 'text-orange-500' },
+  red: { chip: 'bg-red-500/12 text-red-600 dark:text-red-300', ink: 'text-red-500' },
+  grey: { chip: 'bg-slate-500/12 text-slate-600 dark:text-slate-300', ink: 'text-slate-500' },
 };
 
 function KpiCardsBlock({ block }: { block: Block }) {
   const cards = Array.isArray(block.cards) ? (block.cards as Record<string, unknown>[]) : [];
   return (
-    <BlockFrame title={block.title}>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {cards.map((card, i) => (
-          <div key={i} className={`rounded-lg border border-l-4 border-line bg-panel px-4 py-3 ${TONE_ACCENT[str(card.tone)] ?? TONE_ACCENT.grey}`}>
-            <p className="text-xs text-muted">{str(card.title)}</p>
-            <p className="mt-1 text-2xl font-semibold text-fg">{str(card.value)}</p>
-            <p className="mt-0.5 text-xs text-subtle">{str(card.description)}</p>
-          </div>
-        ))}
+    <BlockFrame title={block.title} description={block.description}>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {cards.map((card, i) => {
+          const tone = TONE[str(card.tone)] ?? TONE.grey;
+          const Icon = blockIcon(card.icon, Gauge);
+          const trend = Array.isArray(card.trend) ? card.trend.map(Number).filter(Number.isFinite) : [];
+          return (
+            <div key={i} className="group relative overflow-hidden rounded-xl border border-line bg-panel p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted">{str(card.title)}</p>
+                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tone.chip}`}>
+                  <Icon size={16} aria-hidden />
+                </span>
+              </div>
+              <div className="mt-2 flex items-end justify-between gap-3">
+                <div>
+                  <p className="text-3xl font-semibold tabular-nums tracking-tight text-fg">{str(card.value)}</p>
+                  <p className="mt-1 text-xs text-subtle">{str(card.description)}</p>
+                </div>
+                <span className={tone.ink}>
+                  <Sparkline values={trend} />
+                </span>
+              </div>
+            </div>
+          );
+        })}
       </div>
+    </BlockFrame>
+  );
+}
+
+function HeroBlock({ block }: { block: Block }) {
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const name = str(block.user).split('@')[0];
+  return (
+    <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-sky-600 via-indigo-600 to-violet-700 p-6 text-white shadow-lg sm:p-8">
+      <div aria-hidden className="pointer-events-none absolute -right-16 -top-24 h-72 w-72 rounded-full bg-white/10 blur-2xl" />
+      <div aria-hidden className="pointer-events-none absolute -bottom-28 right-40 h-64 w-64 rounded-full bg-sky-300/20 blur-3xl" />
+      <div className="relative">
+        {block.eyebrow ? <p className="text-xs font-medium uppercase tracking-[0.18em] text-white/70">{str(block.eyebrow)}</p> : null}
+        <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
+          {name ? `${greeting}, ${name}` : str(block.title) || greeting}
+        </h2>
+        {block.subtitle ? <p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/80">{str(block.subtitle)}</p> : null}
+      </div>
+    </section>
+  );
+}
+
+const HEALTH: Record<string, { dot: string; label: string }> = {
+  ok: { dot: 'bg-emerald-500', label: 'Operational' },
+  warn: { dot: 'bg-amber-500', label: 'Attention' },
+  down: { dot: 'bg-red-500', label: 'Down' },
+};
+
+function StatusListBlock({ block }: { block: Block }) {
+  const items = Array.isArray(block.items) ? (block.items as Record<string, unknown>[]) : [];
+  return (
+    <BlockFrame title={block.title} description={block.description}>
+      <ul className="divide-y divide-line rounded-xl border border-line bg-panel shadow-sm">
+        {items.length === 0 && <li className="px-4 py-3 text-sm text-muted">Nothing to show.</li>}
+        {items.map((item, i) => {
+          const health = HEALTH[str(item.status)] ?? HEALTH.ok;
+          return (
+            <li key={i} className="flex items-center gap-3 px-4 py-2.5">
+              <span className="relative flex h-2.5 w-2.5 shrink-0">
+                {item.status === 'ok' && <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-40 ${health.dot}`} />}
+                <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${health.dot}`} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium text-fg">{str(item.label)}</span>
+                <span className="block truncate text-xs text-subtle">{str(item.detail)}</span>
+              </span>
+              <span className="sr-only">{health.label}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </BlockFrame>
+  );
+}
+
+function timeAgo(iso: string): string {
+  const seconds = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
+  if (!Number.isFinite(seconds)) return '';
+  if (seconds < 60) return 'just now';
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  return new Date(iso).toLocaleDateString('en-IN', { dateStyle: 'medium' });
+}
+
+function ActivityFeedBlock({ block }: { block: Block }) {
+  const items = Array.isArray(block.items) ? (block.items as Record<string, unknown>[]) : [];
+  return (
+    <BlockFrame title={block.title} description={block.description}>
+      <ol className="rounded-xl border border-line bg-panel p-4 shadow-sm">
+        {items.length === 0 && <li className="text-sm text-muted">No activity yet. Run an action to get started.</li>}
+        {items.map((item, i) => (
+          <li key={i} className="relative flex gap-3 pb-4 last:pb-0">
+            {i < items.length - 1 && <span aria-hidden className="absolute left-[11px] top-6 h-full w-px bg-line" />}
+            <span className="relative z-[1] flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-page ring-1 ring-line">
+              <Workflow size={12} className="text-muted" aria-hidden />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="truncate text-sm font-medium text-fg">{str(item.title)}</span>
+                {item.status ? <StatusPill value={str(item.status)} /> : null}
+              </div>
+              <p className="mt-0.5 truncate text-xs text-subtle">
+                {[timeAgo(str(item.at)), str(item.duration), str(item.user)].filter(Boolean).join(' · ')}
+              </p>
+            </div>
+          </li>
+        ))}
+      </ol>
     </BlockFrame>
   );
 }
@@ -247,22 +363,58 @@ function ToggleBlock({ block, form, onFormChange }: { block: Block } & FormProps
   );
 }
 
+/**
+ * A button fires its workflow (`eventKey`), or opens another page of the app (`to`).
+ * Buttons with an icon or description render as action tiles.
+ */
 function ButtonGroupBlock({ block, onAction, busy }: { block: Block } & FormProps) {
+  const navigate = useNavigate();
   const buttons = Array.isArray(block.buttons) ? (block.buttons as Record<string, unknown>[]) : [];
+  const tiles = buttons.some((b) => b.icon || b.description);
   return (
-    <BlockFrame title={block.title}>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-        {buttons.map((b, i) => (
-          <button
-            key={i}
-            type="button"
-            disabled={busy || !onAction || !str(b.eventKey)}
-            onClick={() => onAction?.(str(b.eventKey), (b.payload as Record<string, unknown>) ?? {}, str(b.label))}
-            className="rounded-lg border border-line bg-panel px-4 py-3 text-left text-sm font-medium text-fg shadow-sm transition-colors hover:border-sky-500 hover:bg-sky-500/5 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {str(b.label)}
-          </button>
-        ))}
+    <BlockFrame title={block.title} description={block.description}>
+      <div className={`grid gap-2 ${tiles ? 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-4' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'}`}>
+        {buttons.map((b, i) => {
+          const to = str(b.to);
+          const internal = to.startsWith('/app');
+          const disabled = internal ? false : busy || !onAction || !str(b.eventKey);
+          const onClick = () =>
+            internal ? navigate(to) : onAction?.(str(b.eventKey), (b.payload as Record<string, unknown>) ?? {}, str(b.label));
+          if (!tiles) {
+            return (
+              <button
+                key={i}
+                type="button"
+                disabled={disabled}
+                onClick={onClick}
+                className="rounded-lg border border-line bg-panel px-4 py-3 text-left text-sm font-medium text-fg shadow-sm transition-colors hover:border-sky-500 hover:bg-sky-500/5 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {str(b.label)}
+              </button>
+            );
+          }
+          const Icon = blockIcon(b.icon);
+          return (
+            <button
+              key={i}
+              type="button"
+              disabled={disabled}
+              onClick={onClick}
+              className="group flex items-start gap-3 rounded-xl border border-line bg-panel p-3.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-sky-500/60 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-500 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-sky-500/15 to-indigo-500/15 text-sky-600 transition group-hover:from-sky-500 group-hover:to-indigo-500 group-hover:text-white dark:text-sky-300">
+                <Icon size={17} aria-hidden />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-1 text-sm font-semibold text-fg">
+                  {str(b.label)}
+                  <ArrowRight size={13} className="-translate-x-1 opacity-0 transition group-hover:translate-x-0 group-hover:opacity-100" aria-hidden />
+                </span>
+                {b.description ? <span className="mt-0.5 block text-xs leading-snug text-subtle">{str(b.description)}</span> : null}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </BlockFrame>
   );
@@ -290,6 +442,12 @@ function renderBlock(block: Block, i: number, formProps: FormProps) {
       );
     case 'executiveDashboard':
       return <ExecutiveDashboard key={i} data={block} />;
+    case 'hero':
+      return <HeroBlock key={i} block={block} />;
+    case 'statusList':
+      return <StatusListBlock key={i} block={block} />;
+    case 'activityFeed':
+      return <ActivityFeedBlock key={i} block={block} />;
     case 'select':
       return <SelectBlock key={i} block={block} {...formProps} />;
     case 'toggle':
@@ -305,21 +463,60 @@ function renderBlock(block: Block, i: number, formProps: FormProps) {
   }
 }
 
-/** Renders a workflow's UI response. Inputs (select/toggle) sit in one row above the content. */
-export function Renderer({ ui, ...formProps }: { ui: UiResponse } & FormProps) {
+const FULL_WIDTH = new Set(['hero', 'kpiCards', 'executiveDashboard']);
+const ASIDE = new Set(['statusList', 'activityFeed']);
+
+/**
+ * Renders a workflow's UI response. Inputs (select/toggle) sit in one row above the content.
+ * The dashboard layout puts hero and KPI blocks full width, status and activity blocks in a
+ * side column and everything else (plus `children`, e.g. an action's result) in the main column.
+ */
+export function Renderer({
+  ui,
+  layout = 'stack',
+  children,
+  ...formProps
+}: { ui: UiResponse; layout?: 'stack' | 'dashboard'; children?: ReactNode } & FormProps) {
   const blocks = (Array.isArray(ui.blocks) ? ui.blocks : []).filter((b): b is Block => typeof b?.type === 'string');
   const sources = ui.sources ?? {};
   const numbers = citationNumbers(blocks);
   const isInput = (b: Block) => b.type === 'select' || b.type === 'toggle';
   const inputs = blocks.filter(isInput);
   const cited = [...numbers.entries()].filter(([id]) => sources[id]);
+  const inputRow = inputs.length > 0 && (
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-line bg-panel px-4 py-3 shadow-sm">
+      {inputs.map((b, i) => renderBlock(b, i, formProps))}
+    </div>
+  );
+
+  if (layout === 'dashboard') {
+    const rest = blocks.filter((b) => !isInput(b));
+    const aside = rest.filter((b) => ASIDE.has(b.type));
+    const main = rest.filter((b) => !FULL_WIDTH.has(b.type) && !ASIDE.has(b.type));
+    return (
+      <CitationContext.Provider value={{ sources, numbers }}>
+        <div className="space-y-6">
+          {rest.filter((b) => FULL_WIDTH.has(b.type)).map((b, i) => renderBlock(b, i, formProps))}
+          <div className="grid gap-6 lg:grid-cols-3">
+            <div className="space-y-5 lg:col-span-2">
+              {inputRow}
+              {main.map((b, i) => renderBlock(b, i, formProps))}
+              {children}
+            </div>
+            {aside.length > 0 && <aside className="space-y-6">{aside.map((b, i) => renderBlock(b, i, formProps))}</aside>}
+          </div>
+        </div>
+      </CitationContext.Provider>
+    );
+  }
 
   return (
     <CitationContext.Provider value={{ sources, numbers }}>
       <div className="space-y-5">
         {ui.title && <h2 className="text-lg font-semibold text-fg">{ui.title}</h2>}
-        {inputs.length > 0 && <div className="flex flex-wrap items-center gap-x-6 gap-y-2">{inputs.map((b, i) => renderBlock(b, i, formProps))}</div>}
+        {inputRow}
         {blocks.filter((b) => !isInput(b)).map((b, i) => renderBlock(b, i, formProps))}
+        {children}
         {cited.length > 0 && (
           <BlockFrame title="Sources">
             <ol className="space-y-1 text-xs text-muted">

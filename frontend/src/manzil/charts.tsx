@@ -110,6 +110,23 @@ export function BarChart({ labels, values, height = 180 }: { labels: string[]; v
   );
 }
 
+/** Decorative trend line for KPI cards; the card's own value and label carry the meaning. */
+export function Sparkline({ values, width = 96, height = 28 }: { values: number[]; width?: number; height?: number }) {
+  if (values.length < 2) return null;
+  const max = Math.max(...values, 1);
+  const step = width / (values.length - 1);
+  const points = values.map((v, i) => [i * step, height - 2 - (v / max) * (height - 4)] as const);
+  const line = points.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  const [lastX, lastY] = points[points.length - 1];
+  return (
+    <svg width={width} height={height} aria-hidden className="overflow-visible text-current">
+      <path d={`${line} L${width},${height} L0,${height} Z`} fill="currentColor" opacity={0.12} />
+      <path d={line} fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={lastX} cy={lastY} r={2.5} fill="currentColor" />
+    </svg>
+  );
+}
+
 export interface DonutSegment {
   label: string;
   value: number;

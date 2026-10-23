@@ -27,6 +27,7 @@ export type FormState = Record<string, string | boolean>;
 
 /** The events the app's tabs fire; a published workflow must exist for each. */
 export const EVENTS = {
+  overview: 'manzil.overview',
   dashboard: 'manzil.dashboard.load',
   chat: 'manzil.chat',
   activity: 'manzil.activity',

@@ -108,5 +108,24 @@ export function createServices(db: Db): PlatformServices {
       );
       return { ...totals, byEvent, byDay };
     },
+
+    async platformStatus({ role }) {
+      const published = await db.query<{ event_key: string; name: string; version: number; published_at: string; allowed_roles: string }>(
+        'SELECT event_key, name, version, published_at, allowed_roles FROM published_workflows ORDER BY event_key',
+      );
+      const [runs] = await db.query<Record<string, number | string | null>>(
+        `SELECT count(*) FILTER (WHERE status = 'running' AND started_at > now() - interval '10 minutes')::int AS running,
+                count(*) FILTER (WHERE started_at > now() - interval '24 hours')::int AS "runs24h",
+                count(*) FILTER (WHERE status = 'failed' AND started_at > now() - interval '24 hours')::int AS "failed24h",
+                max(started_at) AS "lastRunAt"
+           FROM runs`,
+      );
+      return {
+        ...runs,
+        published: published
+          .filter((p) => p.allowed_roles.split(',').includes(role))
+          .map(({ allowed_roles: _, ...p }) => p),
+      };
+    },
   };
 }

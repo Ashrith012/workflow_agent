@@ -17,6 +17,8 @@ export interface RunUser {
 export interface PlatformServices {
   runHistory(options: { userId?: string; limit: number }): Promise<Record<string, unknown>[]>;
   runStats(options: { userId?: string; days: number }): Promise<Record<string, unknown>>;
+  /** Published workflows the role may trigger, plus live run counts across the platform. */
+  platformStatus(options: { role: string }): Promise<Record<string, unknown>>;
 }
 
 /**
@@ -90,6 +92,18 @@ export async function postToAgentService(path: string, body: unknown, ctx: Execu
     throw new Error(`Python agent service ${response.status}: ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`);
   }
   return response.json();
+}
+
+/** GET /health on the agent service; never throws. */
+export async function pingAgentService(ctx: ExecutionContext): Promise<{ ok: boolean; ms: number; error?: string }> {
+  const started = Date.now();
+  const timeout = AbortSignal.timeout(3_000);
+  try {
+    const response = await fetch(`${AGENT_SERVICE_URL}/health`, { signal: ctx.signal ? AbortSignal.any([ctx.signal, timeout]) : timeout });
+    return { ok: response.ok, ms: Date.now() - started, error: response.ok ? undefined : `HTTP ${response.status}` };
+  } catch (err) {
+    return { ok: false, ms: Date.now() - started, error: (err as Error).message };
+  }
 }
 
 export const isPlainObject = (v: unknown): v is Record<string, any> =>

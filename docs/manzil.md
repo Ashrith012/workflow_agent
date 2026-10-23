@@ -1,6 +1,6 @@
 # Manzil on the workflow builder
 
-The Manzil *Project Execution Validation Assistant* runs entirely as workflows built in the existing builder. Administrators build and publish workflows. End users see only an app with four tabs (Dashboard, Chat with AI, AI Activity, Analytics), and every click or message in it runs a published workflow.
+The Manzil *Project Execution Validation Assistant* runs entirely as workflows built in the existing builder. Administrators build and publish workflows. End users see only an app with five sections (Overview, Reports, Chat with AI, AI Activity, Analytics), and every click or message in it runs a published workflow.
 
 ```
 End-user app (/app) ──POST /api/app/events/<eventKey>──► API server ──► published workflow (cli/execute.ts)
@@ -51,6 +51,7 @@ Required in `.env`:
 
 | Template | Event key | What it does |
 | --- | --- | --- |
+| `manzil-overview.json` | `manzil.overview` | Home page: KPI cards, quick actions, system status and live activity feed. Refreshes every 30 s and after each action |
 | `manzil-dashboard-load.json` | `manzil.dashboard.load` | Dashboard home: project picker (Qdrant facet on `project_id`), dashboard toggle, domain buttons |
 | `manzil-domain.json` | `manzil.domain` | Domain button → embed → Qdrant search → SharePoint MCP → report agent → optional dashboard agent → UI |
 | `manzil-chat.json` | `manzil.chat` | Chat message → domain classifier and dashboard-keyword flag → same pipeline, with chat history |
@@ -70,6 +71,8 @@ To ingest a project, open `manzil-ingest.json` in the builder. Set its trigger's
 | Fixed five-section 16:9 dashboard, footer, colours | `config/prompts/manzil_dashboard.md` (data) + `frontend/src/manzil/ExecutiveDashboard.tsx` (fixed layout, PNG/PDF export) |
 | "Never cite documents that were not retrieved" | Respond to UI → *Citation sources field*: citation ids not in the retrieved chunks are removed and flagged |
 
+Besides `markdown`, `keyValue`, `table`, `kpiCards`, `barChart`, `select`, `toggle` and `buttonGroup`, the app renders `hero`, `statusList` and `activityFeed` blocks. KPI cards accept `icon` and a `trend` array (sparkline). Buttons accept `icon` and `description` (shown as action tiles) and `to: "/app/chat"` to open another section instead of firing an event.
+
 To change Manzil's behaviour, edit the prompt templates or the workflows in the builder and publish again. No code change is needed.
 
 ## New builder nodes
@@ -88,7 +91,8 @@ All of these are generic; the Manzil workflows are just one configuration of the
 | Document Parser / Text Splitter | Text extraction and chunking with metadata |
 | AI Agent (new options) | Prompt templates, context, history, JSON output, *Run only if*, output field |
 | Respond to UI | Terminal node; its output is the app's response |
-| Run History / Run Stats | Platform data for the AI Activity and Analytics workflows |
+| Run History / Run Stats | Platform data for the AI Activity, Analytics and Overview workflows. *Layout* `feed` / `kpis` gives the compact Overview versions |
+| Platform Status | Health of the workflow engine and agent service, runs in progress, 24 h failures, and the live workflows the user's role can run |
 
 Most data nodes have an **Output field** and add their result to the incoming item, so later nodes still see earlier values. *On error: continue* on Qdrant Search and SharePoint MCP lets a run finish when that source is unavailable.
 
