@@ -1,4 +1,4 @@
-import { MousePointer2, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { getNodeDefinition } from '../nodes/registry';
 import { useWorkflowStore } from '../store/useWorkflowStore';
@@ -15,16 +15,8 @@ export function Inspector() {
   const node = selected.length === 1 ? selected[0] : undefined;
   const definition = getNodeDefinition(node?.type);
 
-  if (!node || !definition) {
-    return (
-      <aside className="flex w-80 shrink-0 flex-col items-center justify-center gap-2 border-l border-line bg-panel px-6 text-center text-sm text-subtle">
-        <MousePointer2 size={18} />
-        {selected.length > 1
-          ? `${selected.length} nodes selected — select one to edit`
-          : 'Select a node to edit'}
-      </aside>
-    );
-  }
+  // Hide the panel entirely until exactly one node is selected.
+  if (!node || !definition) return null;
 
   const { icon: Icon, accentColor, label } = definition;
 
