@@ -41,6 +41,8 @@ export interface ExecutionContext {
 export type Executor = (input: any, params: Record<string, string>, ctx: ExecutionContext) => Promise<any>;
 
 const LLM_TIMEOUT_MS = 60_000;
+/** Bulk calls (folder downloads, batch embeddings, upserts) during ingestion. */
+export const BULK_TIMEOUT_MS = 10 * 60_000;
 
 /** sfn-agent-core FastAPI service (`npm run dev:agent`) that runs AIAgent and SharePoint nodes. */
 const AGENT_SERVICE_URL = (process.env.AGENT_SERVICE_URL || 'http://localhost:8000').replace(/\/+$/, '');
@@ -64,8 +66,13 @@ export class AgentServiceUnreachable extends Error {}
  * failure (callers decide whether to fall back) and a plain Error when the
  * service answers with an error, a timeout hits or the run is aborted.
  */
-export async function postToAgentService(path: string, body: unknown, ctx: ExecutionContext): Promise<any> {
-  const timeout = AbortSignal.timeout(LLM_TIMEOUT_MS);
+export async function postToAgentService(
+  path: string,
+  body: unknown,
+  ctx: ExecutionContext,
+  timeoutMs: number = LLM_TIMEOUT_MS,
+): Promise<any> {
+  const timeout = AbortSignal.timeout(timeoutMs);
   let response: Response;
   try {
     response = await fetch(`${AGENT_SERVICE_URL}${path}`, {

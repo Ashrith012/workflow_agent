@@ -35,7 +35,7 @@
         "y": 120
       },
       "parameters": {
-        "model": "gemini:gemini-embedding-001",
+        "model": "gemini:gemini-embedding-2",
         "text": "{{ $json.classification.category }}: {{ $json.message }}",
         "itemsField": "",
         "textKey": "text",

@@ -30,6 +30,8 @@ export interface ParameterDefinition {
 export interface NodeDefinition {
   type: string;
   label: string;
+  /** One or two plain-language sentences shown in the palette and the inspector. */
+  description: string;
   accentColor: string;
   icon: LucideIcon;
   defaultParameters: Record<string, string>;

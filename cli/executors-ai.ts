@@ -5,6 +5,7 @@
  * except TextSplitter and the keyword part of TextClassifier, which are pure.
  */
 import {
+  BULK_TIMEOUT_MS,
   isPlainObject,
   mergeOutput,
   postToAgentService,
@@ -13,6 +14,9 @@ import {
   type Executor,
 } from './node-runtime.js';
 import { interpolate, interpolateJson, readPath } from './interpolate.js';
+
+/** Texts per embeddings call; matches the agent service's provider batch size. */
+const EMBED_BATCH = 100;
 
 /** Array at `path` in the input (a single object counts as one item). */
 function readItems(input: unknown, path: string, node: string): any[] {
@@ -155,8 +159,15 @@ export const aiExecutors: Record<string, Executor> = {
     const items = readItems(input, itemsField, 'Embeddings');
     if (items.length === 0) return mergeOutput(input, itemsField, []);
     const texts = items.map((item) => String(item?.[textKey] ?? ''));
-    const data = await postToAgentService('/embeddings', { texts, model: params.model ?? '', live: ctx.live }, ctx);
-    return mergeOutput(input, itemsField, items.map((item, i) => ({ ...item, vector: data.vectors[i] })));
+    // One agent-service call per batch, so a rate-limited provider (the service waits and retries)
+    // never pushes a single call past its timeout.
+    const vectors: number[][] = [];
+    for (let start = 0; start < texts.length; start += EMBED_BATCH) {
+      const batch = texts.slice(start, start + EMBED_BATCH);
+      const data = await postToAgentService('/embeddings', { texts: batch, model: params.model ?? '', live: ctx.live }, ctx, BULK_TIMEOUT_MS);
+      vectors.push(...data.vectors);
+    }
+    return mergeOutput(input, itemsField, items.map((item, i) => ({ ...item, vector: vectors[i] })));
   },
 
   QdrantSearch: continuable(async (input, params, ctx) => {
@@ -196,8 +207,15 @@ export const aiExecutors: Record<string, Executor> = {
     const points = items.map(({ vector, id, ...payload }) => ({ id, vector, payload }));
     const data = await postToAgentService(
       '/connectors/qdrant/upsert',
-      { collection, points, create_if_missing: params.createIfMissing !== 'no', live: ctx.live },
+      {
+        collection,
+        points,
+        create_if_missing: params.createIfMissing !== 'no',
+        index_fields: (params.indexFields ?? '').split(',').map((f) => f.trim()).filter(Boolean),
+        live: ctx.live,
+      },
       ctx,
+      BULK_TIMEOUT_MS,
     );
     return mergeOutput(input, params.outputField || 'upsert', data);
   },
@@ -227,6 +245,7 @@ export const aiExecutors: Record<string, Executor> = {
         '/tools/parse',
         { name: file.name, content: file.content, encoding: file.encoding === 'base64' ? 'base64' : 'utf-8' },
         ctx,
+        BULK_TIMEOUT_MS, // large PDFs take a while to extract
       );
       const doc = { doc_name: file.name, url: file.webUrl ?? '', path: file.path ?? '', modified: file.lastModified ?? '', text: data.text, pages: data.pages };
       return data.unsupported || !data.text?.trim() ? { name: file.name, skipped: data.unsupported ?? 'no text' } : doc;

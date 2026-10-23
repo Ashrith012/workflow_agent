@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:server": "tsx watch --env-file-if-exists=.env server/index.ts",
-    "dev:agent": "python -m uvicorn src.main:app --reload --port 8000",
+    "dev:agent": "python -m uvicorn src.main:app --reload --reload-dir src --reload-dir config --reload-include models.json --reload-include agent_config.yaml --port 8000",
     "dev:all": "concurrently -n web,api,agent -c blue,green,yellow \"npm run dev\" \"npm run dev:server\" \"npm run dev:agent\"",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
@@ -17,7 +17,9 @@
     "check:registry": "tsx cli/check-registry.ts",
     "test:agent": "python -m pytest tests/",
     "test:nodes": "tsx --test tests/nodes.test.ts",
-    "test:server": "tsx --test tests/server.test.ts"
+    "test:server": "tsx --test tests/server.test.ts",
+    "ingest": "tsx --env-file-if-exists=.env cli/ingest.ts",
+    "db": "tsx --env-file-if-exists=.env cli/db.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.11",

@@ -12,7 +12,7 @@
       "parameters": {
         "eventKey": "manzil.ingest",
         "allowedRoles": "admin",
-        "samplePayload": "{\n  \"path\": \"Projects/PRJ-001\",\n  \"projectId\": \"PRJ-001\"\n}"
+        "samplePayload": "{\n  \"path\": \"Knowledge Docx - Manzil/Hubli\",\n  \"projectId\": \"Hubli\"\n}"
       }
     },
     {
@@ -25,10 +25,11 @@
       "parameters": {
         "operation": "getFolderFiles",
         "siteUrl": "",
-        "library": "",
+        "library": "ProjectExecution",
         "path": "{{ $json.path }}",
         "listName": "",
         "content": "",
+        "limit": "1000",
         "outputField": "sharepoint"
       }
     },
@@ -54,8 +55,8 @@
       "parameters": {
         "itemsField": "documents",
         "textKey": "text",
-        "chunkSize": "1500",
-        "overlap": "200",
+        "chunkSize": "2500",
+        "overlap": "250",
         "metadata": "{\n  \"project_id\": \"{{ $json.projectId }}\"\n}",
         "outputField": "chunks"
       }
@@ -68,7 +69,7 @@
         "y": 120
       },
       "parameters": {
-        "model": "gemini:gemini-embedding-001",
+        "model": "gemini:gemini-embedding-2",
         "text": "",
         "itemsField": "chunks",
         "textKey": "text",
@@ -86,6 +87,7 @@
         "collection": "project_documents",
         "itemsField": "chunks",
         "createIfMissing": "yes",
+        "indexFields": "project_id, doc_type",
         "outputField": "upsert"
       }
     },

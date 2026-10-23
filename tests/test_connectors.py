@@ -62,7 +62,7 @@ def test_prompts_endpoint_lists_templates():
 
 def test_embeddings_mock_is_deterministic_and_sized():
     body = client.post("/embeddings", json={"texts": ["a", "b", "a"], "live": False}).json()
-    assert body["model"] == "gemini:gemini-embedding-001" and body["dimensions"] == 3072
+    assert body["model"] == "gemini:gemini-embedding-2" and body["dimensions"] == 3072
     assert len(body["vectors"]) == 3 and len(body["vectors"][0]) == 3072
     assert body["vectors"][0] == body["vectors"][2] != body["vectors"][1]
 
@@ -241,3 +241,27 @@ def test_gemini_json_mode_does_not_send_json_object(monkeypatch):
     assert response.json()["json"] == {"blocks": []}
     assert calls[0]["base_url"].startswith("https://generativelanguage.googleapis.com/")
     assert "response_format" not in calls[1]
+
+
+def test_qdrant_upsert_creates_collection_and_indexes():
+    class FakeClient:
+        def __init__(self):
+            self.calls = []
+
+        async def collection_exists(self, name):
+            return False
+
+        async def create_collection(self, **kwargs):
+            self.calls.append(("create_collection", kwargs["vectors_config"].size))
+
+        async def create_payload_index(self, **kwargs):
+            self.calls.append(("index", kwargs["field_name"]))
+
+        async def upsert(self, **kwargs):
+            self.calls.append(("upsert", len(kwargs["points"])))
+
+    fake = FakeClient()
+    points = [{"vector": [0.1, 0.2, 0.3], "payload": {"url": "u", "chunk_index": 0, "project_id": "P1"}}]
+    result = asyncio.run(QdrantTool(client=fake).upsert("docs", points, index_fields=["project_id", "doc_type"]))
+    assert fake.calls == [("create_collection", 3), ("index", "project_id"), ("index", "doc_type"), ("upsert", 1)]
+    assert result == {"collection": "docs", "upserted": 1, "indexed_fields": ["project_id", "doc_type"]}

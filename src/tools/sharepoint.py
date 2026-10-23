@@ -1,4 +1,5 @@
 """SharePoint Online connector over Microsoft Graph (app-only, client credentials)."""
+import asyncio
 import base64
 import os
 import time
@@ -12,7 +13,8 @@ TOKEN_URL = "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
 CREDENTIAL_ENV = ("SHAREPOINT_TENANT_ID", "SHAREPOINT_CLIENT_ID", "SHAREPOINT_CLIENT_SECRET")
 
 OPERATIONS = ("listFiles", "getFile", "getFolderFiles", "uploadFile", "listItems")
-MAX_DOWNLOAD_BYTES = 5 * 1024 * 1024
+MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024
+DOWNLOAD_CONCURRENCY = 6
 DEFAULT_LIMIT = 100
 
 
@@ -188,22 +190,36 @@ class SharePointTool:
 
     async def _get_folder_files(self, client: httpx.AsyncClient, drive: str, path: str, limit: int) -> Dict[str, Any]:
         """Every file under `path`, subfolders included, with contents (for ingestion). Stops at `limit` files."""
-        files: List[Dict[str, Any]] = []
+        wanted: List[str] = []
         skipped: List[Dict[str, Any]] = []
         folders = [path]
-        while folders and len(files) < limit:
+        while folders and len(wanted) < limit:
             folder = folders.pop(0)
             listing = await self._list_files(client, drive, folder, 1000)
             for entry in listing["files"]:
                 child = f"{folder}/{entry['name']}" if folder else entry["name"]
                 if entry["isFolder"]:
                     folders.append(child)
-                elif len(files) >= limit:
+                elif len(wanted) >= limit:
                     break
                 elif (entry.get("size") or 0) > MAX_DOWNLOAD_BYTES:
                     skipped.append({"name": entry["name"], "path": "/" + child, "reason": f"larger than {MAX_DOWNLOAD_BYTES} bytes"})
                 else:
-                    files.append(await self._get_file(client, drive, child))
+                    wanted.append(child)
+
+        # Download a few at a time; one file failing is reported, not fatal.
+        semaphore = asyncio.Semaphore(DOWNLOAD_CONCURRENCY)
+
+        async def fetch(child: str) -> Any:
+            async with semaphore:
+                try:
+                    return await self._get_file(client, drive, child)
+                except (SharePointError, httpx.HTTPError) as err:
+                    return {"name": child.rsplit("/", 1)[-1], "path": "/" + child, "reason": str(err)}
+
+        files: List[Dict[str, Any]] = []
+        for result in await asyncio.gather(*(fetch(c) for c in wanted)):
+            (files if "content" in result else skipped).append(result)
         return {"folder": "/" + path, "files": files, "skipped": skipped}
 
     async def _upload_file(self, client: httpx.AsyncClient, drive: str, path: str, content: str) -> Dict[str, Any]:

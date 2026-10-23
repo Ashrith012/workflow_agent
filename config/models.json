@@ -32,9 +32,10 @@
       ]
     }
   },
-  "default_embedding_model": "gemini:gemini-embedding-001",
+  "default_embedding_model": "gemini:gemini-embedding-2",
   "embedding_models": {
     "gemini": [
+      { "id": "gemini-embedding-2", "label": "gemini-embedding-2 (3072)", "dimensions": 3072 },
       { "id": "gemini-embedding-001", "label": "gemini-embedding-001 (3072)", "dimensions": 3072 }
     ],
     "openai": [

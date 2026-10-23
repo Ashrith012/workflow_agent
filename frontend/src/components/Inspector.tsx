@@ -72,9 +72,12 @@ export function Inspector() {
 
   return (
     <aside className="flex w-80 shrink-0 flex-col border-l border-line bg-panel">
-      <div className="flex items-center gap-2 border-b border-line px-4 py-3">
-        <Icon size={16} style={{ color: accentColor }} />
-        <h2 className="text-sm font-semibold text-fg">{label}</h2>
+      <div className="border-b border-line px-4 py-3">
+        <div className="flex items-center gap-2">
+          <Icon size={16} style={{ color: accentColor }} />
+          <h2 className="text-sm font-semibold text-fg">{label}</h2>
+        </div>
+        <p className="mt-1 text-xs leading-5 text-muted">{definition.description}</p>
       </div>
 
       <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">

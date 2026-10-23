@@ -4,6 +4,7 @@ import { appExecutors } from './executors-app.js';
 import { interpolate } from './interpolate.js';
 import {
   AgentServiceUnreachable,
+  BULK_TIMEOUT_MS,
   isPlainObject,
   mergeOutput,
   postToAgentService,
@@ -81,10 +82,13 @@ export const executors: Record<string, Executor> = {
         library: field('library'),
         path: field('path'),
         list_name: field('listName'),
+        // Blank keeps the connector's default (100 files / items).
+        limit: Number(params.limit) > 0 ? Number(params.limit) : undefined,
         content: field('content'),
         live: ctx.live,
       },
       ctx,
+      params.operation === 'getFolderFiles' ? BULK_TIMEOUT_MS : undefined,
     );
     // Blank outputField keeps the original behaviour: the result replaces the input.
     return params.outputField ? mergeOutput(input, params.outputField, result) : result;
