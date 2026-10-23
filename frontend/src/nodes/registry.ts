@@ -36,6 +36,7 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
   {
     type: 'WebhookTrigger',
     label: 'Webhook Trigger',
+    description: 'Starts the workflow from an HTTP request. Good for testing or for calls from other systems.',
     accentColor: '#22c55e',
     icon: Webhook,
     defaultParameters: { path: '/v1/test' },
@@ -45,6 +46,7 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
     // Started by POST /api/app/events/<eventKey> once the workflow is published.
     type: 'UIEventTrigger',
     label: 'UI Event Trigger',
+    description: 'Starts the workflow when a button in the end-user app is clicked. Set the event key and who may use it.',
     accentColor: '#22c55e',
     icon: MousePointerClick,
     defaultParameters: { eventKey: '', allowedRoles: 'user, admin', samplePayload: '{}' },
@@ -57,6 +59,7 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
   {
     type: 'ChatTrigger',
     label: 'Chat Trigger',
+    description: 'Starts the workflow when a user sends a chat message, with the earlier messages included.',
     accentColor: '#22c55e',
     icon: MessageSquare,
     defaultParameters: { eventKey: 'chat.message', allowedRoles: 'user, admin', samplePayload: '' },
@@ -74,6 +77,7 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
   {
     type: 'AIAgent',
     label: 'AI Agent',
+    description: 'Asks an AI model (Groq, Gemini or OpenAI) to write an answer from your prompt and the data it is given.',
     accentColor: '#06b6d4',
     icon: Bot,
     defaultParameters: { model: DEFAULT_MODEL, prompt: '', tools: 'web_search' },
@@ -104,6 +108,7 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
   {
     type: 'TextClassifier',
     label: 'Text Classifier',
+    description: 'Sorts a message into a category using keywords, such as which project area a question is about.',
     accentColor: '#a855f7',
     icon: Tags,
     defaultParameters: { text: '{{ $json.message }}', categories: '{}', flags: '{}', defaultCategory: '', model: '', outputField: 'classification' },
@@ -119,6 +124,7 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
   {
     type: 'SetFields',
     label: 'Set Fields',
+    description: 'Creates or reshapes data for the next step, for example by building a search query from earlier values.',
     accentColor: '#64748b',
     icon: Braces,
     defaultParameters: { values: '{}', mode: 'merge' },
@@ -130,6 +136,7 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
   {
     type: 'Embeddings',
     label: 'Embeddings',
+    description: 'Turns text into numbers that capture its meaning, so similar text can be found later.',
     accentColor: '#f59e0b',
     icon: Binary,
     defaultParameters: { model: DEFAULT_EMBEDDING_MODEL, text: '', itemsField: '', textKey: 'text', outputField: 'vector' },
@@ -144,6 +151,7 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
   {
     type: 'QdrantSearch',
     label: 'Qdrant Search',
+    description: 'Finds the document pieces closest in meaning to a question, or lists values such as project IDs.',
     accentColor: '#dc2626',
     icon: Database,
     defaultParameters: { operation: 'search', collection: '', vectorField: 'vector', topK: '8', filter: '', scoreThreshold: '', textField: 'text', facetKey: '', outputField: 'chunks', onError: 'fail' },
@@ -163,6 +171,7 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
   {
     type: 'QdrantUpsert',
     label: 'Qdrant Upsert',
+    description: 'Saves document pieces and their embeddings into the Qdrant knowledge base so they can be searched.',
     accentColor: '#dc2626',
     icon: DatabaseZap,
     defaultParameters: { collection: '', itemsField: 'chunks', createIfMissing: 'yes', indexFields: 'project_id, doc_type', outputField: 'upsert' },
@@ -178,6 +187,7 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
     // Executed by the Python agent service (src/tools/sharepoint.py) via Microsoft Graph.
     type: 'SharePoint',
     label: 'SharePoint',
+    description: 'Lists, downloads or uploads files in a SharePoint document library, or reads a SharePoint list.',
     accentColor: '#0ea5e9',
     icon: FolderOpen,
     defaultParameters: { operation: 'listFiles', siteUrl: '', library: '', path: '', listName: '', content: '' },
@@ -215,6 +225,7 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
     // Executed by the Python agent service (src/tools/sharepoint_mcp.py) over MCP streamable HTTP.
     type: 'SharePointMCP',
     label: 'SharePoint MCP',
+    description: 'Calls a tool on a SharePoint MCP server, for example to search live documents.',
     accentColor: '#0ea5e9',
     icon: Plug,
     defaultParameters: { operation: 'callTool', tool: '', arguments: '{}', outputField: 'sharepoint', onError: 'fail' },
@@ -229,6 +240,7 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
   {
     type: 'DocumentParser',
     label: 'Document Parser',
+    description: 'Pulls the plain text out of PDF, Word, Excel and text files. Scanned PDFs and images are skipped.',
     accentColor: '#8b5cf6',
     icon: FileText,
     defaultParameters: { itemsField: 'files', outputField: 'documents' },
@@ -240,6 +252,7 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
   {
     type: 'TextSplitter',
     label: 'Text Splitter',
+    description: 'Cuts long documents into small, overlapping pieces that are easier to search.',
     accentColor: '#8b5cf6',
     icon: Scissors,
     defaultParameters: { itemsField: 'documents', textKey: 'text', chunkSize: '1500', overlap: '200', metadata: '{}', outputField: 'chunks' },
@@ -256,6 +269,7 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
     // Terminal node: its output is exactly what the end-user app receives and renders.
     type: 'RespondToUI',
     label: 'Respond to UI',
+    description: 'The last step: sends the result back to the app to display, and removes citations with no matching source.',
     accentColor: '#16a34a',
     icon: LayoutDashboard,
     defaultParameters: { title: '', blocksFrom: '', sourcesFrom: '', emptyMessage: '' },
@@ -269,6 +283,7 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
   {
     type: 'RunHistory',
     label: 'Run History',
+    description: 'Lists recent workflow runs, for the AI Activity page.',
     accentColor: '#64748b',
     icon: History,
     defaultParameters: { scope: 'mine', limit: '50', title: 'AI Activity', outputField: 'activity' },
@@ -282,6 +297,7 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
   {
     type: 'RunStats',
     label: 'Run Stats',
+    description: 'Counts runs, success rate and response time, for the Analytics page.',
     accentColor: '#64748b',
     icon: BarChart3,
     defaultParameters: { scope: 'mine', days: '30', outputField: 'analytics' },

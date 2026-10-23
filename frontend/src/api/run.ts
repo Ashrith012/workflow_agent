@@ -19,21 +19,31 @@ export class RunRequestError extends Error {
   }
 }
 
+/** The user pressed Stop. Closing the request makes the server cancel the run (see server/routes/run.ts). */
+export class RunStoppedError extends Error {
+  constructor() {
+    super('Run stopped.');
+    this.name = 'RunStoppedError';
+  }
+}
+
 const isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object';
 
 export async function runWorkflow(
   workflow: ExportedWorkflow,
-  options: { mode?: RunMode } = {},
+  options: { mode?: RunMode; signal?: AbortSignal } = {},
 ): Promise<RunResponse> {
+  const timeout = AbortSignal.timeout(CLIENT_TIMEOUT_MS);
   let response: Response;
   try {
     response = await fetch('/api/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ workflow, options: { mode: options.mode ?? 'mock' } }),
-      signal: AbortSignal.timeout(CLIENT_TIMEOUT_MS),
+      signal: options.signal ? AbortSignal.any([options.signal, timeout]) : timeout,
     });
   } catch (err) {
+    if (options.signal?.aborted) throw new RunStoppedError();
     if (err instanceof DOMException && err.name === 'TimeoutError') {
       throw new RunRequestError(`The server did not respond within ${CLIENT_TIMEOUT_MS / 1000}s.`);
     }
@@ -41,6 +51,7 @@ export async function runWorkflow(
   }
 
   const body: unknown = await response.json().catch(() => undefined);
+  if (options.signal?.aborted) throw new RunStoppedError();
 
   if (!response.ok) {
     if (isRecord(body) && typeof body.error === 'string') {

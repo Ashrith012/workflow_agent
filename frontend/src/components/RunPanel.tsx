@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, ChevronRight, CircleDashed, Loader2, Play, X, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronRight, CircleDashed, Loader2, Play, Square, X, XCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { getNodeDefinition } from '../nodes/registry';
 import type { ExportedWorkflow, NodeResult, RunMode, RunResponse } from '../types';
@@ -7,6 +7,7 @@ export type RunState =
   | { phase: 'idle' }
   | { phase: 'running'; mode: RunMode; workflow: ExportedWorkflow }
   | { phase: 'done'; mode: RunMode; result: RunResponse }
+  | { phase: 'stopped'; mode: RunMode }
   | { phase: 'error'; mode: RunMode; message: string; status?: number; details?: unknown };
 
 interface RunPanelProps {
@@ -109,6 +110,13 @@ function StatusBadge({ run }: { run: RunState }) {
           Failed
         </span>
       );
+    case 'stopped':
+      return (
+        <span className={`${base} bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300`}>
+          <Square size={10} className="fill-current" />
+          Stopped
+        </span>
+      );
     case 'error':
       return (
         <span className={`${base} bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300`}>
@@ -135,6 +143,16 @@ function Body({ run }: { run: RunState }): ReactNode {
             <PendingRow key={n.id} type={n.type} id={n.id} />
           ))}
         </ol>
+      );
+    case 'stopped':
+      return (
+        <div className="flex h-full flex-col items-center justify-center gap-1.5 text-center text-sm text-subtle">
+          <Square size={16} />
+          You stopped this run. No further nodes will run.
+          <span className="max-w-md text-xs">
+            A node that was already calling an outside service (for example a Qdrant upsert) may still finish that one call.
+          </span>
+        </div>
       );
     case 'error': {
       const details = Array.isArray(run.details) ? run.details.filter((d) => typeof d === 'string') : [];

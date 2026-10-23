@@ -6,12 +6,15 @@ import {
   Moon,
   PanelBottom,
   Play,
+  Send,
+  Square,
   Sun,
   Trash2,
   Workflow,
   X,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { api, ApiError } from '../api/client';
 import { serializeWorkflow } from '../lib/serialize';
 import { validateWorkflow } from '../lib/validate';
 import { useThemeStore } from '../store/useThemeStore';
@@ -38,11 +41,12 @@ function currentWorkflow(): ExportedWorkflow {
 interface ToolbarProps {
   running: boolean;
   onRun: (workflow: ExportedWorkflow, mode: RunMode) => void;
+  onStop: () => void;
   panelOpen: boolean;
   onTogglePanel: () => void;
 }
 
-export function Toolbar({ running, onRun, panelOpen, onTogglePanel }: ToolbarProps) {
+export function Toolbar({ running, onRun, onStop, panelOpen, onTogglePanel }: ToolbarProps) {
   const workflowName = useWorkflowStore((s) => s.workflowName);
   const setWorkflowName = useWorkflowStore((s) => s.setWorkflowName);
   const nodeCount = useWorkflowStore((s) => s.nodes.length);
@@ -52,6 +56,7 @@ export function Toolbar({ running, onRun, panelOpen, onTogglePanel }: ToolbarPro
   const toggleTheme = useThemeStore((s) => s.toggleTheme);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [mode, setMode] = useState<RunMode>('mock');
+  const [publishing, setPublishing] = useState(false);
 
   // Success notices fade on their own; errors stay until dismissed.
   useEffect(() => {
@@ -79,6 +84,27 @@ export function Toolbar({ running, onRun, panelOpen, onTogglePanel }: ToolbarPro
       title = 'Exported (clipboard unavailable)';
     }
     setNotice({ kind: 'success', title, details: warnings });
+  };
+
+  // Same endpoint as "Publish canvas" on the Publish & users page; the server checks the trigger and Respond to UI node.
+  const onPublish = async () => {
+    const workflow = currentWorkflow();
+    const { errors } = validateWorkflow(workflow);
+    if (errors.length > 0) {
+      setNotice({ kind: 'error', title: 'Publish failed', details: errors });
+      return;
+    }
+    setPublishing(true);
+    setNotice(null);
+    try {
+      const res = await api<{ eventKey: string; version: number }>('/api/admin/publish', { body: { workflow } });
+      setNotice({ kind: 'success', title: `Published on "${res.eventKey}" (version ${res.version})`, details: [] });
+    } catch (err) {
+      const details = err instanceof ApiError && Array.isArray(err.details) ? (err.details as string[]) : [];
+      setNotice({ kind: 'error', title: (err as Error).message || 'Publish failed', details });
+    } finally {
+      setPublishing(false);
+    }
   };
 
   const runDisabled = nodeCount === 0 || running;
@@ -143,18 +169,29 @@ export function Toolbar({ running, onRun, panelOpen, onTogglePanel }: ToolbarPro
           Clear canvas
         </button>
         <div className="flex items-center">
-          <button
-            type="button"
-            onClick={onRunClick}
-            disabled={runDisabled}
-            title={nodeCount === 0 ? 'Add a node to run the workflow' : `Run workflow (${mode})`}
-            className={`flex items-center gap-1.5 rounded-l-md bg-sky-500 px-3 py-1.5 text-sm font-medium text-slate-950 transition-colors hover:bg-sky-400 disabled:hover:bg-sky-500 ${
-              running ? 'cursor-progress' : 'disabled:cursor-not-allowed disabled:opacity-50'
-            }`}
-          >
-            {running ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} className="fill-current" />}
-            {running ? 'Running…' : 'Run'}
-          </button>
+          {running ? (
+            <button
+              type="button"
+              onClick={onStop}
+              title="Stop the run: no further nodes will run"
+              className="flex items-center gap-1.5 rounded-l-md bg-red-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-400"
+            >
+              <Loader2 size={14} className="animate-spin" />
+              Stop
+              <Square size={11} className="fill-current" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onRunClick}
+              disabled={runDisabled}
+              title={nodeCount === 0 ? 'Add a node to run the workflow' : `Run workflow (${mode})`}
+              className="flex items-center gap-1.5 rounded-l-md bg-sky-500 px-3 py-1.5 text-sm font-medium text-slate-950 transition-colors hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-sky-500"
+            >
+              <Play size={14} className="fill-current" />
+              Run
+            </button>
+          )}
           <div
             role="radiogroup"
             aria-label="Run mode"
@@ -184,6 +221,16 @@ export function Toolbar({ running, onRun, panelOpen, onTogglePanel }: ToolbarPro
         >
           <Download size={14} />
           Export JSON
+        </button>
+        <button
+          type="button"
+          onClick={() => void onPublish()}
+          disabled={nodeCount === 0 || publishing}
+          title="Publish this workflow to the end-user app (needs a UI Event or Chat Trigger and a Respond to UI node)"
+          className="flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-emerald-600"
+        >
+          {publishing ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+          {publishing ? 'Publishing…' : 'Publish'}
         </button>
       </div>
 

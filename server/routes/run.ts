@@ -63,6 +63,11 @@ export const runRoutes: FastifyPluginAsync<RunRoutesOptions> = async (app, opts)
     const runId = `run_${nanoid(10)}`;
     const log = request.log.child({ runId });
     const controller = new AbortController();
+    // The builder's Stop button closes the request; stop the run instead of finishing it for nobody.
+    const onClientGone = () => {
+      if (!reply.raw.writableEnded) controller.abort(new Error('Run stopped by the client'));
+    };
+    reply.raw.once('close', onClientGone);
     let timer: NodeJS.Timeout | undefined;
     const timedOut = new Promise<'timeout'>((resolve) => {
       timer = setTimeout(() => {
@@ -85,6 +90,10 @@ export const runRoutes: FastifyPluginAsync<RunRoutesOptions> = async (app, opts)
         timedOut,
       ]);
 
+      if (result !== 'timeout' && controller.signal.reason?.message === 'Run stopped by the client') {
+        log.info('run stopped by the client');
+        return reply.code(499).send({ error: 'Run stopped' });
+      }
       if (result === 'timeout' || controller.signal.aborted) {
         log.warn({ timeoutMs }, 'run timed out');
         return reply.code(500).send({ error: 'Execution timed out' });
@@ -94,6 +103,7 @@ export const runRoutes: FastifyPluginAsync<RunRoutesOptions> = async (app, opts)
       return reply.code(200).send({ runId, ...result });
     } finally {
       clearTimeout(timer);
+      reply.raw.off('close', onClientGone);
     }
   });
 };

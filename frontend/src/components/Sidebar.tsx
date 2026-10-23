@@ -36,30 +36,33 @@ export function Sidebar() {
       <div className="px-4 pb-2 pt-4 text-[11px] font-semibold uppercase tracking-wider text-subtle">
         Nodes
       </div>
-      <ul className="space-y-1.5 px-3">
-        {NODE_DEFINITIONS.map(({ type, label, icon: Icon, accentColor }) => (
+      <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-3 pb-2">
+        {NODE_DEFINITIONS.map(({ type, label, description, icon: Icon, accentColor }) => (
           <li key={type}>
             <button
               type="button"
               draggable
               onDragStart={(e) => onDragStart(e, type)}
               onClick={() => onClickAdd(type)}
-              title="Drag onto the canvas, or click to add"
-              className="group flex w-full cursor-grab items-center gap-2.5 rounded-md border border-line bg-page/60 px-2.5 py-2 text-left text-sm text-fg transition-colors hover:border-line-strong hover:bg-hover active:cursor-grabbing"
+              title={`${description}\n\nDrag onto the canvas, or click to add.`}
+              className="group flex w-full cursor-grab items-start gap-2.5 rounded-md border border-line bg-page/60 px-2.5 py-2 text-left text-sm text-fg transition-colors hover:border-line-strong hover:bg-hover active:cursor-grabbing"
             >
               <span
-                className="flex h-7 w-7 items-center justify-center rounded"
+                className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded"
                 style={{ backgroundColor: `${accentColor}26`, color: accentColor }}
               >
                 <Icon size={15} />
               </span>
-              <span className="flex-1">{label}</span>
-              <GripVertical size={14} className="text-faint group-hover:text-muted" />
+              <span className="min-w-0 flex-1">
+                <span className="block">{label}</span>
+                <span className="mt-0.5 line-clamp-2 block text-xs leading-4 text-subtle">{description}</span>
+              </span>
+              <GripVertical size={14} className="mt-1 shrink-0 text-faint group-hover:text-muted" />
             </button>
           </li>
         ))}
       </ul>
-      <p className="mt-auto px-4 py-4 text-xs leading-5 text-subtle">
+      <p className="shrink-0 border-t border-line px-4 py-3 text-xs leading-5 text-subtle">
         Drag nodes onto the canvas or click to add. Connect the right handle to the left handle.
         Press Delete / Backspace to remove a selection.
       </p>
