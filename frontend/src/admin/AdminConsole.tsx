@@ -5,7 +5,6 @@ import { api, ApiError } from '../api/client';
 import { serializeWorkflow } from '../lib/serialize';
 import { DEFAULT_EDGE_OPTIONS, useWorkflowStore } from '../store/useWorkflowStore';
 import type { ExportedWorkflow } from '../types';
-import { AdminBar } from './AdminBar';
 
 /** Ready-made workflows shipped in examples/manzil (built from the same palette nodes as anything else). */
 const TEMPLATES = Object.entries(
@@ -142,7 +141,6 @@ export function AdminConsole() {
 
   return (
     <div className="flex h-full flex-col bg-page text-fg">
-      <AdminBar />
       <main className="mx-auto w-full max-w-5xl flex-1 space-y-4 overflow-y-auto p-4">
         {notice?.text && (
           <div

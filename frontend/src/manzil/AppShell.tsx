@@ -1,6 +1,7 @@
-import { Activity, BarChart3, Gauge, LayoutDashboard, LogOut, Menu, Moon, Sparkles, Sun, Workflow, X } from 'lucide-react';
+import { Activity, BarChart3, Gauge, LayoutDashboard, Menu, Moon, Sparkles, Sun, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Link, NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { AdminLinks, ProfileCard } from '../admin/AdminBar';
 import { api } from '../api/client';
 import { useAuthStore } from '../store/useAuthStore';
 import { useThemeStore } from '../store/useThemeStore';
@@ -20,7 +21,6 @@ const TABS = [
 /** The end-user app. Everything it shows comes from published workflows; it holds no business logic. */
 export function AppShell() {
   const user = useAuthStore((s) => s.user);
-  const logout = useAuthStore((s) => s.logout);
   const theme = useThemeStore((s) => s.theme);
   const toggleTheme = useThemeStore((s) => s.toggleTheme);
   const [available, setAvailable] = useState<Set<string> | null>(null);
@@ -40,7 +40,6 @@ export function AppShell() {
   const unavailable = (event: string) => available !== null && !available.has(event);
   const liveCount = available ? TABS.filter((t) => available.has(t.event)).length : undefined;
   const current = TABS.find((t) => location.pathname.startsWith(`/app/${t.path}`));
-  const initial = (user?.email ?? '?').charAt(0).toUpperCase();
 
   const sidebar = (
     <div className="flex h-full flex-col">
@@ -86,9 +85,7 @@ export function AppShell() {
         {user?.role === 'admin' && (
           <>
             <p className="px-3 pb-2 pt-5 text-[10px] font-semibold uppercase tracking-[0.14em] text-faint">Administration</p>
-            <Link to="/" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-fg-soft hover:bg-hover hover:text-fg">
-              <Workflow size={16} /> Workflow builder
-            </Link>
+            <AdminLinks />
           </>
         )}
       </nav>
@@ -106,24 +103,7 @@ export function AppShell() {
         </div>
       )}
 
-      <div className="flex items-center gap-2.5 border-t border-line p-3">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-500 to-slate-700 text-xs font-semibold text-white">
-          {initial}
-        </span>
-        <div className="min-w-0 flex-1 leading-tight">
-          <p className="truncate text-xs font-medium text-fg">{user?.email}</p>
-          <p className="text-[11px] capitalize text-subtle">{user?.role}</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => void logout()}
-          aria-label="Sign out"
-          title="Sign out"
-          className="flex h-8 w-8 items-center justify-center rounded-md text-subtle hover:bg-hover hover:text-fg"
-        >
-          <LogOut size={15} />
-        </button>
-      </div>
+      <ProfileCard />
     </div>
   );
 

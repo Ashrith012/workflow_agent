@@ -1,24 +1,12 @@
 import { Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { AdminConsole } from './admin/AdminConsole';
-import { AdminBar } from './admin/AdminBar';
+import { AdminLayout } from './admin/AdminBar';
 import App from './App';
 import { AppShell } from './manzil/AppShell';
 import { LoginPage } from './LoginPage';
 import { useAuthStore } from './store/useAuthStore';
-
-/** The builder (App) is untouched; administrators get it under a thin navigation bar. */
-function BuilderPage() {
-  return (
-    <div className="flex h-full flex-col">
-      <AdminBar />
-      <div className="min-h-0 flex-1">
-        <App />
-      </div>
-    </div>
-  );
-}
 
 export function Root() {
   const user = useAuthStore((s) => s.user);
@@ -47,8 +35,11 @@ export function Root() {
           <Route path="*" element={<Navigate to="/login" replace />} />
         ) : (
           <>
-            <Route path="/" element={isAdmin ? <BuilderPage /> : <Navigate to="/app" replace />} />
-            <Route path="/admin" element={isAdmin ? <AdminConsole /> : <Navigate to="/app" replace />} />
+            {/* One layout route, so the admin sidebar keeps its state when switching between the two pages. */}
+            <Route element={isAdmin ? <AdminLayout><Outlet /></AdminLayout> : <Navigate to="/app" replace />}>
+              <Route path="/" element={<App />} />
+              <Route path="/admin" element={<AdminConsole />} />
+            </Route>
             <Route path="/app/*" element={<AppShell />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </>
