@@ -153,7 +153,8 @@ export function AppShell() {
             </button>
           </div>
         </header>
-        <main className="min-h-0 flex-1 overflow-y-auto">
+        {/* relative: absolutely positioned content (e.g. sr-only labels) must stay inside this scroller, not grow the document. */}
+        <main className="relative min-h-0 flex-1 overflow-y-auto">
           <Routes>
             <Route index element={<Navigate to="/app/overview" replace />} />
             <Route path="overview" element={<OverviewTab projectId={projectId} onProjectChange={setProjectId} />} />
