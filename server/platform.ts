@@ -2,6 +2,7 @@
  * Run persistence and the PlatformServices the RunHistory / RunStats nodes read.
  */
 import { nanoid } from 'nanoid';
+import { readFileSync } from 'node:fs';
 import type { PlatformServices } from '../cli/executors.js';
 import type { ExportedWorkflow, NodeResult } from '../frontend/src/types.js';
 import type { Db } from './db/index.js';
@@ -70,16 +71,87 @@ export class RunRecorder {
   }
 }
 
+/**
+ * Fills tenant_models from config/models.json (the catalog the AI Agent node
+ * offers), authorized by default. Existing rows keep whatever status the
+ * tenant admin set; the admin's Models page is the source of truth after that.
+ */
+export async function seedTenantModels(db: Db): Promise<void> {
+  const catalog = JSON.parse(readFileSync(new URL('../config/models.json', import.meta.url), 'utf8')) as {
+    providers?: Record<string, { label?: string; models?: { id: string; label: string }[]; self_hosted?: boolean; base_url?: string }>;
+  };
+  for (const [provider, def] of Object.entries(catalog.providers ?? {})) {
+    // A self-hosted catalog provider (e.g. the Ollama endpoint) reaches the agent service
+    // through its own base_url, which SELFHOSTED_BASE_URL can override at run time.
+    const kind = def.self_hosted ? 'selfhosted' : 'hosted';
+    for (const m of def.models ?? []) {
+      await db.query(
+        `INSERT INTO tenant_models (model_key, name, provider, kind, base_url) VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (model_key) DO UPDATE SET kind = EXCLUDED.kind WHERE tenant_models.kind <> EXCLUDED.kind`,
+        [`${provider}:${m.id}`, m.label, def.label ?? provider, kind, def.self_hosted ? (def.base_url ?? '') : ''],
+      );
+    }
+  }
+}
+
+/** One line in the tenant's audit log: approvals, publishes, consent changes, agent actions. */
+export async function audit(
+  db: Db,
+  actor: { id: string; email: string } | null,
+  action: string,
+  subject: string,
+  detail = '',
+): Promise<void> {
+  await db.query('INSERT INTO audit_log (actor_id, actor_email, action, subject, detail) VALUES ($1, $2, $3, $4, $5)', [
+    actor?.id ?? null,
+    actor?.email ?? null,
+    action,
+    subject,
+    detail,
+  ]);
+}
+
 export function createServices(db: Db): PlatformServices {
   return {
+    async modelEndpoint(modelKey) {
+      const [row] = await db.query<{ base_url: string; api_key_env: string }>(
+        `SELECT base_url, api_key_env FROM tenant_models WHERE model_key = $1 AND kind = 'selfhosted' AND base_url <> ''`,
+        [modelKey],
+      );
+      if (!row) return null;
+      // Secrets stay in the environment; the database only names the variable.
+      return { baseUrl: row.base_url, apiKey: (row.api_key_env && process.env[row.api_key_env]) || '' };
+    },
+
     async runHistory({ userId, limit }) {
-      return db.query(
-        `SELECT r.id, r.event_key, r.workflow_name, r.label, r.status, r.duration_ms, r.started_at, u.email AS user_email
+      // guardrails: what policy checks did on each run, shown to the user in AI Activity.
+      const runs = await db.query<{ id: string; nodes?: unknown[] }>(
+        `SELECT r.id, r.event_key, r.workflow_name, r.label, r.status, r.duration_ms, r.started_at, u.email AS user_email,
+                (SELECT string_agg(g.title || ' — policy: ' ||
+                          CASE g.action WHEN 'mask_log' THEN 'Mask and log' WHEN 'block' THEN 'Block'
+                               WHEN 'block_page_admin' THEN 'Block and page admin' WHEN 'warn' THEN 'Warn user' ELSE 'Log' END,
+                          '; ' ORDER BY g.created_at)
+                   FROM guardrail_events g WHERE g.run_id = r.id) AS guardrails
            FROM runs r LEFT JOIN users u ON u.id = r.user_id
           WHERE r.ai AND ($1::text IS NULL OR r.user_id = $1)
           ORDER BY r.started_at DESC LIMIT $2`,
         [userId ?? null, limit],
       );
+      if (runs.length > 0) {
+        // Per-run node steps in execution order, so AI Activity can explain each run.
+        const nodes = await db.query<{ run_id: string; type: string; status: string; duration_ms: number; output: unknown }>(
+          `SELECT run_id, type, status, duration_ms, output FROM run_nodes WHERE run_id = ANY($1) ORDER BY seq`,
+          [runs.map((r) => r.id)],
+        );
+        const byRun = new Map<string, unknown[]>();
+        for (const n of nodes) {
+          const list = byRun.get(n.run_id) ?? [];
+          list.push(n);
+          byRun.set(n.run_id, list);
+        }
+        for (const r of runs) r.nodes = byRun.get(r.id) ?? [];
+      }
+      return runs;
     },
 
     async runStats({ userId, days }) {

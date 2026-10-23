@@ -35,7 +35,8 @@ function writeSession(id: string | undefined) {
  * compact chat window that can be minimized (collapsed to its title bar) or closed (back to
  * the launcher). Each message fires the chat workflow; the server keeps the session's history.
  */
-export function AssistantWidget({ projectId }: { projectId: string }) {
+/** `chatEvent` is whichever chat workflow is published; it falls back to the Manzil assistant. */
+export function AssistantWidget({ projectId, chatEvent = EVENTS.chat }: { projectId: string; chatEvent?: string }) {
   const [open, setOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [maximized, setMaximized] = useState(false);
@@ -90,7 +91,7 @@ export function AssistantWidget({ projectId }: { projectId: string }) {
     setMessages((m) => [...m, { role: 'user', content: message }]);
     setBusy(true);
     try {
-      const result = await triggerEvent(EVENTS.chat, { message, projectId }, sessionId);
+      const result = await triggerEvent(chatEvent, { message, projectId }, sessionId);
       if (result.sessionId) {
         setSessionId(result.sessionId);
         writeSession(result.sessionId);

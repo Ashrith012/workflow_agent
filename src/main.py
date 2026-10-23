@@ -107,6 +107,8 @@ class ExecuteRequest(BaseModel):
     reasoning_effort: Optional[Literal["low", "medium", "high"]] = Field(
         default=None, description="For reasoning models on providers that support it (see models.json)"
     )
+    base_url: str = Field(default="", description="Overrides the provider's endpoint (tenant-registered self-hosted models)")
+    api_key: str = Field(default="", description="Key for that endpoint, when it needs one")
 
 
 class ExecuteResponse(BaseModel):
@@ -125,18 +127,43 @@ class SharePointRequest(BaseModel):
     live: bool = Field(default=True, description="False returns mock data without calling SharePoint")
 
 
-def resolve_model(provider: Optional[str], model: Optional[str]) -> tuple[str, str]:
+def provider_base_url(spec: Dict[str, Any]) -> str:
+    """The provider's endpoint. A `base_url_env` lets a self-hosted URL move without editing the catalog."""
+    env_name = spec.get("base_url_env")
+    return (env_name and os.getenv(env_name)) or spec["base_url"]
+
+
+def provider_api_key(spec: Dict[str, Any]) -> Optional[str]:
+    """None means "needs a key that is not set"; self-hosted providers need none, so they get a placeholder."""
+    env_name = spec.get("api_key_env")
+    if not env_name:
+        return "self-hosted"  # OpenAI clients require some value; Ollama and friends ignore it.
+    return os.getenv(env_name)
+
+
+def provider_spec(provider: str, base_url: str = "") -> Dict[str, Any]:
+    """
+    The catalog entry for a provider. A caller-supplied base_url means the model is one a
+    tenant admin registered against their own endpoint, so it needs no catalog entry.
+    """
+    spec = PROVIDERS.get(provider)
+    if spec is not None:
+        return spec
+    if base_url:
+        return {"label": f"Self-hosted ({provider})", "base_url": base_url, "api_key_env": None, "self_hosted": True}
+    known = ", ".join(PROVIDERS)
+    raise HTTPException(status_code=400, detail=f"Unknown provider '{provider}'. Known providers: {known}.")
+
+
+def resolve_model(provider: Optional[str], model: Optional[str], base_url: str = "") -> tuple[str, str]:
     """Returns (provider, model id). Accepts `groq` + `openai/gpt-oss-20b` or `groq:openai/gpt-oss-20b`."""
     if model and ":" in model and not provider:
         provider, model = model.split(":", 1)
     if not provider:
         provider, model = MODELS["default_model"].split(":", 1)
     provider = provider.strip().lower()
-    spec = PROVIDERS.get(provider)
-    if spec is None:
-        known = ", ".join(PROVIDERS)
-        raise HTTPException(status_code=400, detail=f"Unknown provider '{provider}'. Known providers: {known}.")
-    return provider, model or spec["models"][0]["id"]
+    spec = provider_spec(provider, base_url)
+    return provider, model or (spec.get("models") or [{"id": ""}])[0]["id"]
 
 
 CHARS_PER_TOKEN = 3.5  # deliberately low, so the estimate errs towards fewer tokens sent
@@ -217,12 +244,14 @@ async def chat(
     json_mode: bool = False,
     max_tokens: Optional[int] = None,
     reasoning_effort: Optional[str] = None,
+    base_url: Optional[str] = None,
 ) -> str:
     from openai import AsyncOpenAI, RateLimitError
 
-    spec = PROVIDERS[provider]
-    # Every catalog provider speaks the OpenAI chat-completions API at its own base_url.
-    client = AsyncOpenAI(api_key=api_key, base_url=spec["base_url"], timeout=TIMEOUT_S)
+    spec = provider_spec(provider, base_url or "")
+    # Every provider speaks the OpenAI chat-completions API. base_url overrides let a
+    # tenant admin point a self-hosted model at their own endpoint without a code change.
+    client = AsyncOpenAI(api_key=api_key, base_url=base_url or provider_base_url(spec), timeout=TIMEOUT_S)
     kwargs: Dict[str, Any] = {}
     if "temperature" in AGENT_CONFIG:
         kwargs["temperature"] = AGENT_CONFIG["temperature"]
@@ -258,7 +287,9 @@ def list_models():
         "providers": {
             key: {
                 "label": spec["label"],
-                "configured": bool(os.getenv(spec["api_key_env"])),
+                "configured": bool(provider_api_key(spec)),
+                "self_hosted": bool(spec.get("self_hosted")),
+                "base_url": provider_base_url(spec),
                 "models": spec["models"],
             }
             for key, spec in PROVIDERS.items()
@@ -268,8 +299,8 @@ def list_models():
 
 @app.post("/agent/execute", response_model=ExecuteResponse, response_model_by_alias=True)
 async def execute_agent(payload: ExecuteRequest):
-    provider, model = resolve_model(payload.provider, payload.model)
-    spec = PROVIDERS[provider]
+    provider, model = resolve_model(payload.provider, payload.model, payload.base_url)
+    spec = provider_spec(provider, payload.base_url)
     tools = payload.tools or []
 
     messages = build_messages(payload)  # validates template names in mock mode too
@@ -280,11 +311,12 @@ async def execute_agent(payload: ExecuteRequest):
             return ExecuteResponse(text=json.dumps(mock), json_output=mock)
         return ExecuteResponse(text=text)
 
-    api_key = os.getenv(spec["api_key_env"])
+    # A tenant admin's self-hosted model carries its own endpoint (and optional key) on the request.
+    api_key = payload.api_key or provider_api_key(spec)
     if not api_key:
         raise HTTPException(
             status_code=400,
-            detail=f"{spec['api_key_env']} is not set; add it to .env and restart the agent service, or run in mock mode.",
+            detail=f"{spec.get('api_key_env')} is not set; add it to .env and restart the agent service, or run in mock mode.",
         )
 
     json_mode = payload.response_format == "json"
@@ -297,6 +329,7 @@ async def execute_agent(payload: ExecuteRequest):
             json_mode=json_mode,
             max_tokens=payload.max_tokens,
             reasoning_effort=payload.reasoning_effort,
+            base_url=payload.base_url or None,
         )
     except Exception as err:
         logger.warning("%s call with model %s failed: %s", spec["label"], model, err)

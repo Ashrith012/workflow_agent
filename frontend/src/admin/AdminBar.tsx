@@ -1,19 +1,30 @@
-import { LayoutDashboard, LogOut, PanelLeftClose, PanelLeftOpen, Send, Sparkles, Workflow } from 'lucide-react';
+import { LayoutDashboard, LogOut, PanelLeftClose, PanelLeftOpen, Send, ShieldCheck, Sparkles, Workflow } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 
-const ADMIN_LINKS = [
-  { to: '/', label: 'Builder', icon: Workflow, end: true },
-  { to: '/admin', label: 'Publish & users', icon: Send, end: false },
-  { to: '/app', label: 'End-user app', icon: LayoutDashboard, end: false },
-] as const;
+const STAFF_LINKS = {
+  // Tenant admin: governs in the console, can still drop into the builder.
+  admin: [
+    { to: '/admin', label: 'Tenant console', icon: ShieldCheck, end: false },
+    { to: '/builder', label: 'Builder', icon: Workflow, end: true },
+    { to: '/fde', label: 'Submissions', icon: Send, end: false },
+    { to: '/app', label: 'End-user app', icon: LayoutDashboard, end: false },
+  ],
+  // FDE: builds and submits; the tenant admin approves. No end-user app access.
+  fde: [
+    { to: '/builder', label: 'Builder', icon: Workflow, end: true },
+    { to: '/fde', label: 'Submit & approvals', icon: Send, end: false },
+  ],
+} as const;
 
-/** Administrator navigation between the builder, the publish console and the end-user app. */
+/** Navigation between the builder, the FDE console and the rest, per role. */
 export function AdminLinks({ onSelect }: { onSelect?: () => void }) {
+  const role = useAuthStore((s) => s.user?.role);
+  if (role !== 'admin' && role !== 'fde') return null;
   return (
     <>
-      {ADMIN_LINKS.map(({ to, label, icon: Icon, end }) => (
+      {STAFF_LINKS[role].map(({ to, label, icon: Icon, end }) => (
         <NavLink
           key={to}
           to={to}
@@ -42,6 +53,7 @@ export function AdminLinks({ onSelect }: { onSelect?: () => void }) {
 export function ProfileCard() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  const roleLabel = user?.role === 'admin' ? 'Tenant admin' : user?.role === 'fde' ? 'FDE' : 'End user';
   return (
     <div className="flex items-center gap-2.5 border-t border-line p-3">
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-500 to-slate-700 text-xs font-semibold text-white">
@@ -49,7 +61,7 @@ export function ProfileCard() {
       </span>
       <div className="min-w-0 flex-1 leading-tight">
         <p className="truncate text-xs font-medium text-fg">{user?.email}</p>
-        <p className="text-[11px] capitalize text-subtle">{user?.role}</p>
+        <p className="text-[11px] text-subtle">{roleLabel}</p>
       </div>
       <button
         type="button"
@@ -65,10 +77,11 @@ export function ProfileCard() {
 }
 
 /**
- * Builder and publish console layout: the admin sidebar is open on arrival and
- * hides once a page is chosen; the slim rail's button brings it back.
+ * Builder and FDE-console layout: the sidebar is open on arrival and hides
+ * once a page is chosen; the slim rail's button brings it back.
  */
 export function AdminLayout({ children }: { children: ReactNode }) {
+  const role = useAuthStore((s) => s.user?.role);
   const [open, setOpen] = useState(true);
   return (
     <div className="flex h-full bg-page text-fg">
@@ -78,7 +91,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-sky-500 to-indigo-600 text-white shadow-md shadow-indigo-500/20">
               <Sparkles size={15} />
             </span>
-            <p className="flex-1 text-sm font-semibold text-fg">Manzil Admin</p>
+            <p className="flex-1 text-sm font-semibold text-fg">{role === 'admin' ? 'Manzil Studio' : 'FDE Studio'}</p>
             <button
               type="button"
               onClick={() => setOpen(false)}
@@ -89,7 +102,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
               <PanelLeftClose size={16} />
             </button>
           </div>
-          <nav className="flex-1 space-y-0.5 p-3" aria-label="Administration">
+          <nav className="flex-1 space-y-0.5 p-3" aria-label="Studio">
             <AdminLinks onSelect={() => setOpen(false)} />
           </nav>
           <ProfileCard />

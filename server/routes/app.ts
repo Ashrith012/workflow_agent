@@ -7,10 +7,13 @@ import type { FastifyPluginAsync } from 'fastify';
 import { nanoid } from 'nanoid';
 import { executeWorkflow } from '../../cli/execute.js';
 import { isPlainObject, type PlatformServices } from '../../cli/executors.js';
+import type { UiResponse } from '../../frontend/src/manzil/types.js';
 import type { ExportedWorkflow, RunMode } from '../../frontend/src/types.js';
 import { requireAuth } from '../auth.js';
+import { connectorProblem, connectorsUsedBy } from '../consent.js';
 import type { Db } from '../db/index.js';
-import { RunRecorder } from '../platform.js';
+import { applyGuardrails } from '../guardrails.js';
+import { audit, RunRecorder, triggerOf } from '../platform.js';
 
 export interface AppRoutesOptions {
   db: Db;
@@ -37,17 +40,91 @@ export function summarizeUi(ui: unknown): string {
   return parts.join('\n').slice(0, 2000);
 }
 
+const roleAllowed = (allowedRoles: string, role: string) => allowedRoles.split(',').map((r) => r.trim()).includes(role);
+
 export const appRoutes: FastifyPluginAsync<AppRoutesOptions> = async (app, { db, services, mode = 'live', timeoutMs = 180_000 }) => {
   app.addHook('preHandler', requireAuth);
+  // FDEs work in the builder and the FDE console; the end-user app is not theirs.
+  app.addHook('preHandler', async (request, reply) => {
+    if (!reply.sent && request.user.role === 'fde') {
+      return reply.code(403).send({ error: 'FDEs do not have access to the end-user app.' });
+    }
+  });
 
-  /** Event keys this user may trigger, so the app can show which features are available. */
+  /**
+   * Event keys this user may trigger, with the live version and the page each workflow
+   * asks for in the app. The app builds its navigation from this, so adding an agent is
+   * a publish, not a front-end change.
+   */
   app.get('/api/app/events', async (request) => {
-    const rows = await db.query<{ event_key: string; allowed_roles: string; trigger_type: string }>(
-      'SELECT event_key, allowed_roles, trigger_type FROM published_workflows',
-    );
+    const rows = await db.query<{
+      event_key: string;
+      name: string;
+      version: number;
+      allowed_roles: string;
+      trigger_type: string;
+      workflow: ExportedWorkflow;
+    }>('SELECT event_key, name, version, allowed_roles, trigger_type, workflow FROM published_workflows');
     return rows
-      .filter((r) => r.allowed_roles.split(',').includes(request.user.role))
-      .map((r) => ({ eventKey: r.event_key, kind: r.trigger_type === 'ChatTrigger' ? 'chat' : 'event' }));
+      .filter((r) => roleAllowed(r.allowed_roles, request.user.role))
+      .map((r) => {
+        const params = triggerOf(r.workflow)?.parameters ?? {};
+        const order = Number(params.appOrder);
+        return {
+          eventKey: r.event_key,
+          name: r.name,
+          version: r.version,
+          kind: r.trigger_type === 'ChatTrigger' ? 'chat' : 'event',
+          section: (params.appSection ?? '').trim(),
+          group: (params.appGroup ?? '').trim(),
+          icon: (params.appIcon ?? '').trim(),
+          order: Number.isFinite(order) ? order : 100,
+        };
+      });
+  });
+
+  /**
+   * My data access: what the assistants can read for this user and why.
+   * usedBy lists the published workflows that touch each connector.
+   */
+  app.get('/api/app/data-access', async (request) => {
+    const [connectors, consents, published] = await Promise.all([
+      db.query<{ id: string }>('SELECT id, name, kind, auth, scope, purpose, enabled FROM connectors ORDER BY kind, name'),
+      db.query<{ connector_id: string; allowed: boolean; updated_at: string }>(
+        'SELECT connector_id, allowed, updated_at FROM user_consents WHERE user_id = $1',
+        [request.user.id],
+      ),
+      db.query<{ name: string; workflow: ExportedWorkflow }>('SELECT name, workflow FROM published_workflows'),
+    ]);
+    const usedBy = new Map<string, string[]>();
+    for (const p of published) {
+      for (const id of connectorsUsedBy(p.workflow)) usedBy.set(id, [...(usedBy.get(id) ?? []), p.name]);
+    }
+    const byId = new Map(consents.map((c) => [c.connector_id, c]));
+    return connectors.map((c) => ({
+      ...c,
+      allowed: byId.get(c.id)?.allowed ?? true,
+      decided_at: byId.get(c.id)?.updated_at ?? null,
+      used_by: usedBy.get(c.id) ?? [],
+    }));
+  });
+
+  /** Turn a user-consent connector on or off for yourself. Takes effect on the next run. */
+  app.post<{ Params: { id: string }; Body: { allowed?: unknown } }>('/api/app/data-access/:id', async (request, reply) => {
+    const allowed = request.body?.allowed;
+    if (typeof allowed !== 'boolean') return reply.code(400).send({ error: '"allowed" must be true or false.' });
+    const [connector] = await db.query<{ name: string; auth: string }>('SELECT name, auth FROM connectors WHERE id = $1', [request.params.id]);
+    if (!connector) return reply.code(404).send({ error: 'No such data source.' });
+    if (connector.auth !== 'user_consent') {
+      return reply.code(400).send({ error: `${connector.name} is company-managed. Ask your administrator to change it.` });
+    }
+    await db.query(
+      `INSERT INTO user_consents (user_id, connector_id, allowed) VALUES ($1, $2, $3)
+       ON CONFLICT (user_id, connector_id) DO UPDATE SET allowed = EXCLUDED.allowed, updated_at = now()`,
+      [request.user.id, request.params.id, allowed],
+    );
+    await audit(db, request.user, 'consent.changed', connector.name, allowed ? 'allowed by the user' : 'turned off by the user');
+    return { ok: true, allowed };
   });
 
   app.get<{ Params: { sessionId: string } }>('/api/app/chat/:sessionId', async (request) =>
@@ -62,12 +139,16 @@ export const appRoutes: FastifyPluginAsync<AppRoutesOptions> = async (app, { db,
     async (request, reply) => {
       const { eventKey } = request.params;
       const user = request.user;
-      const [published] = await db.query<{ workflow: ExportedWorkflow; allowed_roles: string; trigger_type: string }>(
-        'SELECT workflow, allowed_roles, trigger_type FROM published_workflows WHERE event_key = $1',
+      const [published] = await db.query<{ workflow: ExportedWorkflow; allowed_roles: string; trigger_type: string; version: number }>(
+        'SELECT workflow, allowed_roles, trigger_type, version FROM published_workflows WHERE event_key = $1',
         [eventKey],
       );
       if (!published) return reply.code(404).send({ error: 'This feature is not available yet. Ask an administrator to publish it.' });
-      if (!published.allowed_roles.split(',').includes(user.role)) return reply.code(403).send({ error: 'You do not have access to this feature.' });
+      if (!roleAllowed(published.allowed_roles, user.role)) return reply.code(403).send({ error: 'You do not have access to this feature.' });
+
+      // Admin-disabled connectors and the user's own "My data access" switches apply to every run, straight away.
+      const blockedBy = await connectorProblem(db, user.id, published.workflow);
+      if (blockedBy) return reply.code(403).send({ error: blockedBy });
 
       const workflow = published.workflow;
       const body = request.body ?? {};
@@ -115,16 +196,24 @@ export const appRoutes: FastifyPluginAsync<AppRoutesOptions> = async (app, { db,
       if (result.status === 'failed' || !responder) {
         const error = result.error ?? 'The workflow finished without reaching its Respond to UI node.';
         await recorder.finish('failed', error);
+        await audit(db, user, 'agent.run', eventKey, `"${label.slice(0, 120)}" failed`);
         log.warn({ error }, 'app event failed');
-        // Node details are for administrators; end users get a reference they can report.
+        // Node details are for builders; end users get a reference they can report.
         return reply.code(502).send({
-          error: user.role === 'admin' ? error : 'The request could not be completed. Please try again or contact your administrator.',
+          error: user.role !== 'user' ? error : 'The request could not be completed. Please try again or contact your administrator.',
           runId: recorder.id,
         });
       }
       await recorder.finish('completed');
 
-      const ui = responder.output;
+      // Live guardrail policies (set by the tenant admin) run on every response:
+      // PII/Aadhaar/PAN is masked, blocked, warned about or logged per policy,
+      // and the outcome is recorded for the user's AI Activity page.
+      const guard = await applyGuardrails(db, { ui: responder.output as UiResponse, runId: recorder.id, eventKey, user });
+      await audit(db, user, 'agent.run', eventKey, [`"${label.slice(0, 120)}" completed`, ...guard.notes].join(' · '));
+      if (guard.notes.length > 0) log.info({ guardrails: guard.notes }, 'guardrail policy applied');
+
+      const ui = guard.ui;
       if (isChat && sessionId) {
         await db.query(
           `INSERT INTO chat_messages (session_id, user_id, role, content, ui, run_id)
@@ -132,7 +221,7 @@ export const appRoutes: FastifyPluginAsync<AppRoutesOptions> = async (app, { db,
           [sessionId, user.id, String(payload.message), recorder.id, summarizeUi(ui), JSON.stringify(ui)],
         );
       }
-      return { runId: recorder.id, sessionId, ui };
+      return { runId: recorder.id, sessionId, ui, version: published.version };
     },
   );
 };

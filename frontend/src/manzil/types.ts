@@ -20,12 +20,28 @@ export interface EventResult {
   runId: string;
   sessionId?: string;
   ui: UiResponse;
+  /** Version of the published workflow that produced this response. */
+  version?: number;
 }
 
 /** Form values from select/toggle blocks, merged into every button's payload. */
 export type FormState = Record<string, string | boolean>;
 
-/** The events the app's tabs fire; a published workflow must exist for each. */
+/** A published workflow as the app sees it, including the page it asks for in the sidebar. */
+export interface PublishedEvent {
+  eventKey: string;
+  name: string;
+  version: number;
+  kind: 'chat' | 'event';
+  /** Page name in the app; blank means the workflow has no page of its own. */
+  section: string;
+  /** Sidebar heading, so several agents can live side by side. */
+  group: string;
+  icon: string;
+  order: number;
+}
+
+/** The events the app's built-in pages fire; a published workflow must exist for each. */
 export const EVENTS = {
   overview: 'manzil.overview',
   dashboard: 'manzil.dashboard.load',

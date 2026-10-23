@@ -31,7 +31,7 @@ const isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typ
 
 export async function runWorkflow(
   workflow: ExportedWorkflow,
-  options: { mode?: RunMode; signal?: AbortSignal } = {},
+  options: { mode?: RunMode; signal?: AbortSignal; mockPayload?: unknown } = {},
 ): Promise<RunResponse> {
   const timeout = AbortSignal.timeout(CLIENT_TIMEOUT_MS);
   let response: Response;
@@ -39,7 +39,7 @@ export async function runWorkflow(
     response = await fetch('/api/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ workflow, options: { mode: options.mode ?? 'mock' } }),
+      body: JSON.stringify({ workflow, options: { mode: options.mode ?? 'mock', mockPayload: options.mockPayload } }),
       signal: options.signal ? AbortSignal.any([options.signal, timeout]) : timeout,
     });
   } catch (err) {

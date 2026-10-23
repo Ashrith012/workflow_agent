@@ -7,10 +7,10 @@ import { findCycle, validateWorkflowShape } from '../../cli/validate.js';
 import type { ExportedWorkflow } from '../../frontend/src/types.js';
 import { createUser, requireAdmin } from '../auth.js';
 import type { Db } from '../db/index.js';
-import { allowedRoles, triggerOf, TRIGGER_TYPES } from '../platform.js';
+import { allowedRoles, audit, triggerOf, TRIGGER_TYPES } from '../platform.js';
 
 const EVENT_KEY = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
-const ROLES = new Set(['admin', 'user']);
+const ROLES = new Set(['admin', 'fde', 'user']);
 
 /** Publishing rules on top of the shape checks every run gets. Returns problems; empty means publishable. */
 export function publishProblems(workflow: unknown): string[] {
@@ -27,12 +27,44 @@ export function publishProblems(workflow: unknown): string[] {
     const key = triggers[0].parameters.eventKey ?? '';
     if (!EVENT_KEY.test(key)) problems.push(`Event key "${key}" must be 1–100 letters, digits, ".", "_" or "-".`);
     const bad = allowedRoles(triggers[0].parameters).filter((r) => !ROLES.has(r));
-    if (bad.length > 0) problems.push(`Unknown role(s) in Allowed roles: ${bad.join(', ')} (use admin, user).`);
+    if (bad.length > 0) problems.push(`Unknown role(s) in Allowed roles: ${bad.join(', ')} (use admin, fde, user).`);
   }
   if (!wf.nodes.some((n) => n.type === 'RespondToUI')) {
     problems.push('A published workflow needs a Respond to UI node; its output is what the app shows.');
   }
   return problems;
+}
+
+/**
+ * Models the workflow's AI Agent nodes use that the tenant admin has not
+ * authorized. Checked on FDE submission and again on approval/publish, so the
+ * admin's Models page governs what can go live without any code change.
+ */
+export async function unauthorizedModels(db: Db, workflow: ExportedWorkflow): Promise<string[]> {
+  const used = [...new Set(workflow.nodes.filter((n) => n.type === 'AIAgent').map((n) => n.parameters.model).filter(Boolean))];
+  if (used.length === 0) return [];
+  const rows = await db.query<{ model_key: string }>(
+    `SELECT model_key FROM tenant_models WHERE status = 'authorized' AND model_key = ANY($1)`,
+    [used],
+  );
+  const authorized = new Set(rows.map((r) => r.model_key));
+  return used.filter((m) => !authorized.has(m)).map((m) => `Model "${m}" is not authorized by the tenant admin (Models page).`);
+}
+
+/** Upserts the live version of a workflow. Shared by direct admin publish and approval. */
+export async function publishWorkflow(db: Db, workflow: ExportedWorkflow, publishedBy: string | null) {
+  const trigger = triggerOf(workflow)!;
+  const [row] = await db.query<{ event_key: string; version: number }>(
+    `INSERT INTO published_workflows (event_key, name, workflow, trigger_type, allowed_roles, published_by)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (event_key) DO UPDATE SET
+       name = EXCLUDED.name, workflow = EXCLUDED.workflow, trigger_type = EXCLUDED.trigger_type,
+       allowed_roles = EXCLUDED.allowed_roles, published_by = EXCLUDED.published_by,
+       version = published_workflows.version + 1, published_at = now()
+     RETURNING event_key, version`,
+    [trigger.parameters.eventKey, workflow.name, JSON.stringify(workflow), trigger.type, allowedRoles(trigger.parameters).join(','), publishedBy],
+  );
+  return row;
 }
 
 export const adminRoutes: FastifyPluginAsync<{ db: Db }> = async (app, { db }) => {
@@ -58,24 +90,17 @@ export const adminRoutes: FastifyPluginAsync<{ db: Db }> = async (app, { db }) =
     if (problems.length > 0) return reply.code(400).send({ error: 'This workflow cannot be published.', details: problems });
 
     const wf = workflow as ExportedWorkflow;
-    const trigger = triggerOf(wf)!;
-    const [row] = await db.query<{ event_key: string; version: number }>(
-      `INSERT INTO published_workflows (event_key, name, workflow, trigger_type, allowed_roles, published_by)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (event_key) DO UPDATE SET
-         name = EXCLUDED.name, workflow = EXCLUDED.workflow, trigger_type = EXCLUDED.trigger_type,
-         allowed_roles = EXCLUDED.allowed_roles, published_by = EXCLUDED.published_by,
-         version = published_workflows.version + 1, published_at = now()
-       RETURNING event_key, version`,
-      [trigger.parameters.eventKey, wf.name, JSON.stringify(wf), trigger.type, allowedRoles(trigger.parameters).join(','), request.user.id],
-    );
+    const row = await publishWorkflow(db, wf, request.user.id);
+    await audit(db, request.user, 'workflow.published', row.event_key, `"${wf.name}" version ${row.version}, published directly by the tenant admin`);
     request.log.info({ eventKey: row.event_key, version: row.version }, 'workflow published');
     return { eventKey: row.event_key, version: row.version };
   });
 
   app.delete<{ Params: { eventKey: string } }>('/api/admin/published/:eventKey', async (request, reply) => {
     const rows = await db.query('DELETE FROM published_workflows WHERE event_key = $1 RETURNING event_key', [request.params.eventKey]);
-    return rows.length > 0 ? { ok: true } : reply.code(404).send({ error: 'Not published.' });
+    if (rows.length === 0) return reply.code(404).send({ error: 'Not published.' });
+    await audit(db, request.user, 'workflow.unpublished', request.params.eventKey);
+    return { ok: true };
   });
 
   // ---- Users ----
@@ -86,16 +111,20 @@ export const adminRoutes: FastifyPluginAsync<{ db: Db }> = async (app, { db }) =
     const { email, password, role } = request.body ?? {};
     if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+$/.test(email.trim())) return reply.code(400).send({ error: 'A valid email is required.' });
     if (typeof password !== 'string' || password.length < 8) return reply.code(400).send({ error: 'Password must be at least 8 characters.' });
-    if (role !== 'admin' && role !== 'user') return reply.code(400).send({ error: 'Role must be "admin" or "user".' });
+    if (role !== 'admin' && role !== 'fde' && role !== 'user') return reply.code(400).send({ error: 'Role must be "admin", "fde" or "user".' });
     const [existing] = await db.query('SELECT 1 FROM users WHERE email = $1', [email.trim().toLowerCase()]);
     if (existing) return reply.code(409).send({ error: 'A user with this email already exists.' });
-    return createUser(db, email, password, role);
+    const created = await createUser(db, email, password, role);
+    await audit(db, request.user, 'user.created', created.email, `role ${role}`);
+    return created;
   });
 
   app.delete<{ Params: { id: string } }>('/api/admin/users/:id', async (request, reply) => {
     if (request.params.id === request.user.id) return reply.code(400).send({ error: 'You cannot delete your own account.' });
-    const rows = await db.query('DELETE FROM users WHERE id = $1 RETURNING id', [request.params.id]);
-    return rows.length > 0 ? { ok: true } : reply.code(404).send({ error: 'No such user.' });
+    const rows = await db.query<{ email: string }>('DELETE FROM users WHERE id = $1 RETURNING id, email', [request.params.id]);
+    if (rows.length === 0) return reply.code(404).send({ error: 'No such user.' });
+    await audit(db, request.user, 'user.deleted', rows[0].email);
+    return { ok: true };
   });
 
   // ---- Runs (every published-workflow run, with node detail) ----

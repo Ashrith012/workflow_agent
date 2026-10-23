@@ -35,7 +35,15 @@ export function EventTab({ eventKey }: { eventKey: string }) {
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 p-6">
-      <div className="flex justify-end">
+      <div className="flex items-center justify-end gap-2">
+        {state.phase === 'done' && state.result.version !== undefined && (
+          <span
+            className="rounded-full border border-line px-2.5 py-1 text-xs text-muted"
+            title="Version of the published workflow that produced this page"
+          >
+            Workflow v{state.result.version}
+          </span>
+        )}
         <button
           type="button"
           onClick={() => void fire(eventKey)}

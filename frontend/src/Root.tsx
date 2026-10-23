@@ -1,8 +1,9 @@
 import { Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
-import { AdminConsole } from './admin/AdminConsole';
 import { AdminLayout } from './admin/AdminBar';
+import { FdeConsole } from './admin/FdeConsole';
+import { TenantConsole } from './admin/tenant/TenantConsole';
 import App from './App';
 import { AppShell } from './manzil/AppShell';
 import { LoginPage } from './LoginPage';
@@ -26,22 +27,29 @@ export function Root() {
     );
   }
 
+  // admin governs in the tenant console; fde builds; user only sees the app.
   const isAdmin = user?.role === 'admin';
+  const canBuild = isAdmin || user?.role === 'fde';
+  const home = isAdmin ? '/admin/overview' : canBuild ? '/builder' : '/app';
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
+        <Route path="/login" element={user ? <Navigate to={home} replace /> : <LoginPage />} />
         {!user ? (
           <Route path="*" element={<Navigate to="/login" replace />} />
         ) : (
           <>
-            {/* One layout route, so the admin sidebar keeps its state when switching between the two pages. */}
-            <Route element={isAdmin ? <AdminLayout><Outlet /></AdminLayout> : <Navigate to="/app" replace />}>
-              <Route path="/" element={<App />} />
-              <Route path="/admin" element={<AdminConsole />} />
-            </Route>
-            <Route path="/app/*" element={<AppShell />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
+            {isAdmin && <Route path="/admin/:section?" element={<TenantConsole />} />}
+            {canBuild && (
+              /* One layout route, so the studio sidebar keeps its state when switching between the two pages. */
+              <Route element={<AdminLayout><Outlet /></AdminLayout>}>
+                <Route path="/builder" element={<App />} />
+                <Route path="/fde" element={<FdeConsole />} />
+              </Route>
+            )}
+            {/* The end-user app belongs to end users (and the admin for oversight), never to FDEs. */}
+            {user.role !== 'fde' && <Route path="/app/*" element={<AppShell />} />}
+            <Route path="*" element={<Navigate to={home} replace />} />
           </>
         )}
       </Routes>

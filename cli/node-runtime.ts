@@ -10,7 +10,7 @@ import { interpolate } from './interpolate.js';
 export interface RunUser {
   id: string;
   email: string;
-  role: 'admin' | 'user';
+  role: 'admin' | 'fde' | 'user';
 }
 
 /** Platform data the RunHistory / RunStats nodes read. Injected by the API server; absent in the CLI. */
@@ -19,6 +19,11 @@ export interface PlatformServices {
   runStats(options: { userId?: string; days: number }): Promise<Record<string, unknown>>;
   /** Published workflows the role may trigger, plus live run counts across the platform. */
   platformStatus(options: { role: string }): Promise<Record<string, unknown>>;
+  /**
+   * Endpoint for a tenant-registered self-hosted model, so the AI Agent node can reach
+   * an admin's own LLM without a code change. Null for ordinary catalog models.
+   */
+  modelEndpoint?(modelKey: string): Promise<{ baseUrl: string; apiKey: string } | null>;
 }
 
 /**

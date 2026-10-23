@@ -13,8 +13,17 @@ import type { Db } from './db/index.js';
 
 export const COOKIE_NAME = 'wf_session';
 const SESSION_SECONDS = 8 * 60 * 60;
+
+/**
+ * bcrypt work factor. Each step doubles the time to hash and to crack; 10 is the OWASP
+ * floor and a sensible default for this pure-JS implementation. The cost is stored inside
+ * every hash, so raising it here keeps existing passwords verifiable — they are rehashed
+ * at the new cost the next time their owner signs in.
+ */
+const BCRYPT_ROUNDS = Math.min(Math.max(Number(process.env.BCRYPT_ROUNDS) || 10, 10), 15);
+
 /** Compared against when the email is unknown, so timing does not reveal which emails exist. */
-const DUMMY_HASH = bcrypt.hashSync(randomBytes(16).toString('hex'), 10);
+const DUMMY_HASH = bcrypt.hashSync(randomBytes(16).toString('hex'), BCRYPT_ROUNDS);
 
 declare module '@fastify/jwt' {
   interface FastifyJWT {
@@ -46,14 +55,23 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply):
 export async function requireAdmin(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   await requireAuth(request, reply);
   if (reply.sent) return;
-  if (request.user.role !== 'admin') return reply.code(403).send({ error: 'Administrator access required.' });
+  if (request.user.role !== 'admin') return reply.code(403).send({ error: 'Tenant administrator access required.' });
+}
+
+/** The builder and its test runs belong to FDEs; the tenant admin keeps access too. */
+export async function requireBuilder(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await requireAuth(request, reply);
+  if (reply.sent) return;
+  if (request.user.role !== 'admin' && request.user.role !== 'fde') {
+    return reply.code(403).send({ error: 'FDE or administrator access required.' });
+  }
 }
 
 export async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, 10);
+  return bcrypt.hash(password, BCRYPT_ROUNDS);
 }
 
-export async function createUser(db: Db, email: string, password: string, role: 'admin' | 'user'): Promise<RunUser> {
+export async function createUser(db: Db, email: string, password: string, role: 'admin' | 'fde' | 'user'): Promise<RunUser> {
   const user: RunUser = { id: `usr_${nanoid(10)}`, email: email.trim().toLowerCase(), role };
   await db.query('INSERT INTO users (id, email, password_hash, role) VALUES ($1, $2, $3, $4)', [
     user.id,
@@ -89,6 +107,13 @@ export async function authRoutes(app: FastifyInstance, { db }: { db: Db }): Prom
     );
     const ok = await bcrypt.compare(password, row?.password_hash ?? DUMMY_HASH);
     if (!row || !ok) return reply.code(401).send({ error: 'Invalid email or password.' });
+
+    // Upgrade hashes written at a lower cost, now that we know the password is right.
+    if (bcrypt.getRounds(row.password_hash) < BCRYPT_ROUNDS) {
+      await db
+        .query('UPDATE users SET password_hash = $2 WHERE id = $1', [row.id, await hashPassword(password)])
+        .catch((err: Error) => app.log.warn({ err }, 'could not upgrade a password hash'));
+    }
 
     const user: RunUser = { id: row.id, email: row.email, role: row.role };
     const token = await reply.jwtSign(user, { expiresIn: SESSION_SECONDS });

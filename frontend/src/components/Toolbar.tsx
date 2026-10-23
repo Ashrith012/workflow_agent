@@ -2,6 +2,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Download,
+  FilePlus2,
   Loader2,
   Moon,
   PanelBottom,
@@ -9,14 +10,14 @@ import {
   Send,
   Square,
   Sun,
-  Trash2,
   Workflow,
   X,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '../api/client';
 import { serializeWorkflow } from '../lib/serialize';
 import { validateWorkflow } from '../lib/validate';
+import { useAuthStore } from '../store/useAuthStore';
 import { useThemeStore } from '../store/useThemeStore';
 import type { ExportedWorkflow, RunMode } from '../types';
 import { useWorkflowStore } from '../store/useWorkflowStore';
@@ -57,6 +58,20 @@ export function Toolbar({ running, onRun, onStop, panelOpen, onTogglePanel }: To
   const [notice, setNotice] = useState<Notice | null>(null);
   const [mode, setMode] = useState<RunMode>('mock');
   const [publishing, setPublishing] = useState(false);
+  const role = useAuthStore((s) => s.user?.role);
+  // Live version per event key, so the builder always shows which version of this workflow is published.
+  const [liveVersions, setLiveVersions] = useState<Map<string, number>>(new Map());
+  const canvasEventKey = useWorkflowStore(
+    (s) => s.nodes.find((n) => n.type === 'UIEventTrigger' || n.type === 'ChatTrigger')?.data.parameters.eventKey ?? '',
+  );
+
+  const refreshVersions = useCallback(() => {
+    api<{ event_key: string; version: number }[]>('/api/fde/published')
+      .then((rows) => setLiveVersions(new Map(rows.map((r) => [r.event_key, r.version]))))
+      .catch(() => undefined);
+  }, []);
+  useEffect(refreshVersions, [refreshVersions]);
+  const liveVersion = canvasEventKey ? liveVersions.get(canvasEventKey) : undefined;
 
   // Success notices fade on their own; errors stay until dismissed.
   useEffect(() => {
@@ -86,22 +101,28 @@ export function Toolbar({ running, onRun, onStop, panelOpen, onTogglePanel }: To
     setNotice({ kind: 'success', title, details: warnings });
   };
 
-  // Same endpoint as "Publish canvas" on the Publish & users page; the server checks the trigger and Respond to UI node.
+  // Admins publish directly; FDEs submit the canvas for the tenant admin's approval.
   const onPublish = async () => {
     const workflow = currentWorkflow();
     const { errors } = validateWorkflow(workflow);
     if (errors.length > 0) {
-      setNotice({ kind: 'error', title: 'Publish failed', details: errors });
+      setNotice({ kind: 'error', title: role === 'fde' ? 'Submit failed' : 'Publish failed', details: errors });
       return;
     }
     setPublishing(true);
     setNotice(null);
     try {
-      const res = await api<{ eventKey: string; version: number }>('/api/admin/publish', { body: { workflow } });
-      setNotice({ kind: 'success', title: `Published on "${res.eventKey}" (version ${res.version})`, details: [] });
+      if (role === 'fde') {
+        const res = await api<{ eventKey: string }>('/api/fde/submit', { body: { workflow } });
+        setNotice({ kind: 'success', title: `Submitted "${res.eventKey}" for approval — it goes live once the tenant admin approves`, details: [] });
+      } else {
+        const res = await api<{ eventKey: string; version: number }>('/api/admin/publish', { body: { workflow } });
+        setNotice({ kind: 'success', title: `Published on "${res.eventKey}" (version ${res.version})`, details: [] });
+      }
+      refreshVersions();
     } catch (err) {
       const details = err instanceof ApiError && Array.isArray(err.details) ? (err.details as string[]) : [];
-      setNotice({ kind: 'error', title: (err as Error).message || 'Publish failed', details });
+      setNotice({ kind: 'error', title: (err as Error).message || 'Request failed', details });
     } finally {
       setPublishing(false);
     }
@@ -112,8 +133,9 @@ export function Toolbar({ running, onRun, onStop, panelOpen, onTogglePanel }: To
     if (!runDisabled) onRun(currentWorkflow(), mode);
   };
 
-  const onClear = () => {
-    if (window.confirm('Clear the canvas? This removes all nodes and edges.')) {
+  // Starts a blank workflow. Published versions are untouched; this only clears the canvas.
+  const onNewWorkflow = () => {
+    if (nodeCount === 0 || window.confirm('Start a new workflow? The canvas is cleared. Anything already published stays live.')) {
       clear();
       setNotice(null);
     }
@@ -137,6 +159,23 @@ export function Toolbar({ running, onRun, onStop, panelOpen, onTogglePanel }: To
         {nodeCount} {nodeCount === 1 ? 'node' : 'nodes'} · {edgeCount}{' '}
         {edgeCount === 1 ? 'edge' : 'edges'}
       </span>
+
+      {canvasEventKey && (
+        <span
+          title={
+            liveVersion !== undefined
+              ? `End users are on version ${liveVersion} of "${canvasEventKey}". Your next approved ${role === 'fde' ? 'submission' : 'publish'} becomes v${liveVersion + 1}.`
+              : `"${canvasEventKey}" is not published yet`
+          }
+          className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+            liveVersion !== undefined
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300'
+              : 'border-line text-subtle'
+          }`}
+        >
+          {liveVersion !== undefined ? `Live v${liveVersion}` : 'Not published'}
+        </span>
+      )}
 
       <div className="ml-auto flex items-center gap-2">
         <button
@@ -162,11 +201,12 @@ export function Toolbar({ running, onRun, onStop, panelOpen, onTogglePanel }: To
         </button>
         <button
           type="button"
-          onClick={onClear}
+          onClick={onNewWorkflow}
+          title="Start a new, empty workflow"
           className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm text-fg-soft transition-colors hover:bg-hover"
         >
-          <Trash2 size={14} />
-          Clear canvas
+          <FilePlus2 size={14} />
+          New workflow
         </button>
         <div className="flex items-center">
           {running ? (
@@ -226,11 +266,15 @@ export function Toolbar({ running, onRun, onStop, panelOpen, onTogglePanel }: To
           type="button"
           onClick={() => void onPublish()}
           disabled={nodeCount === 0 || publishing}
-          title="Publish this workflow to the end-user app (needs a UI Event or Chat Trigger and a Respond to UI node)"
+          title={
+            role === 'fde'
+              ? 'Send this workflow to the tenant admin for approval; it goes live once approved'
+              : 'Publish this workflow to the end-user app (needs a UI Event or Chat Trigger and a Respond to UI node)'
+          }
           className="flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-emerald-600"
         >
           {publishing ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-          {publishing ? 'Publishing…' : 'Publish'}
+          {publishing ? (role === 'fde' ? 'Submitting…' : 'Publishing…') : role === 'fde' ? 'Submit for approval' : 'Publish'}
         </button>
       </div>
 

@@ -1,4 +1,4 @@
-import { Activity, BarChart3, Gauge, LayoutDashboard, Menu, Moon, Sparkles, Sun, X } from 'lucide-react';
+import { Activity, BarChart3, Gauge, LayoutDashboard, Menu, Moon, ShieldCheck, Sparkles, Sun, Workflow, X, type LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AdminLinks, ProfileCard } from '../admin/AdminBar';
@@ -6,40 +6,96 @@ import { api } from '../api/client';
 import { useAuthStore } from '../store/useAuthStore';
 import { useThemeStore } from '../store/useThemeStore';
 import { AssistantWidget } from './AssistantWidget';
+import { DataAccessTab } from './DataAccessTab';
 import { EventTab } from './EventTab';
 import { DashboardTab } from './DashboardTab';
+import { blockIcon } from './icons';
 import { OverviewTab } from './OverviewTab';
-import { EVENTS } from './types';
+import { EVENTS, type PublishedEvent } from './types';
 
-const TABS = [
+/**
+ * Pages with their own component. Everything else a workflow asks for (its trigger's
+ * "App page name") becomes a generic page at /app/s/<event key>, so a new agent needs
+ * a publish, not a front-end change.
+ */
+const BUILT_IN = [
   { path: 'overview', label: 'Overview', icon: Gauge, event: EVENTS.overview },
   { path: 'dashboard', label: 'Reports', icon: LayoutDashboard, event: EVENTS.dashboard },
   { path: 'activity', label: 'AI Activity', icon: Activity, event: EVENTS.activity },
   { path: 'analytics', label: 'Analytics', icon: BarChart3, event: EVENTS.analytics },
 ] as const;
 
+const BUILT_IN_EVENTS = new Set<string>(BUILT_IN.map((t) => t.event));
+const DEFAULT_GROUP = 'Workspace';
+
+interface NavEntry {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+  event: string;
+  group: string;
+  order: number;
+  live: boolean;
+}
+
+/** The sidebar's groups, built from the built-in pages plus whatever else is published. */
+function navGroups(events: PublishedEvent[] | null): { group: string; entries: NavEntry[] }[] {
+  const byKey = new Map((events ?? []).map((e) => [e.eventKey, e]));
+  const entries: NavEntry[] = BUILT_IN.map((t) => ({
+    to: `/app/${t.path}`,
+    label: byKey.get(t.event)?.section || t.label,
+    icon: t.icon,
+    event: t.event,
+    group: byKey.get(t.event)?.group || DEFAULT_GROUP,
+    order: byKey.get(t.event)?.order ?? 10,
+    live: events === null || byKey.has(t.event),
+  }));
+  for (const e of events ?? []) {
+    if (BUILT_IN_EVENTS.has(e.eventKey) || e.kind === 'chat' || !e.section) continue;
+    entries.push({
+      to: `/app/s/${encodeURIComponent(e.eventKey)}`,
+      label: e.section,
+      icon: blockIcon(e.icon, Workflow),
+      event: e.eventKey,
+      group: e.group || DEFAULT_GROUP,
+      order: e.order,
+      live: true,
+    });
+  }
+  const groups = new Map<string, NavEntry[]>();
+  for (const entry of entries) groups.set(entry.group, [...(groups.get(entry.group) ?? []), entry]);
+  return [...groups.entries()]
+    .sort(([a], [b]) => (a === DEFAULT_GROUP ? -1 : b === DEFAULT_GROUP ? 1 : a.localeCompare(b)))
+    .map(([group, list]) => ({ group, entries: list.sort((x, y) => x.order - y.order || x.label.localeCompare(y.label)) }));
+}
+
 /** The end-user app. Everything it shows comes from published workflows; it holds no business logic. */
 export function AppShell() {
   const user = useAuthStore((s) => s.user);
   const theme = useThemeStore((s) => s.theme);
   const toggleTheme = useThemeStore((s) => s.toggleTheme);
-  const [available, setAvailable] = useState<Set<string> | null>(null);
+  const [events, setEvents] = useState<PublishedEvent[] | null>(null);
   const [navOpen, setNavOpen] = useState(false);
   const location = useLocation();
   // Shared between Overview, Reports and Chat so a chosen project scopes all three.
   const [projectId, setProjectId] = useState('');
 
   useEffect(() => {
-    api<{ eventKey: string }[]>('/api/app/events')
-      .then((events) => setAvailable(new Set(events.map((e) => e.eventKey))))
-      .catch(() => setAvailable(new Set()));
-  }, []);
+    api<PublishedEvent[]>('/api/app/events')
+      .then(setEvents)
+      .catch(() => setEvents([]));
+  }, [location.pathname]);
 
   useEffect(() => setNavOpen(false), [location.pathname]);
 
-  const unavailable = (event: string) => available !== null && !available.has(event);
-  const liveCount = available ? TABS.filter((t) => available.has(t.event)).length : undefined;
-  const current = TABS.find((t) => location.pathname.startsWith(`/app/${t.path}`));
+  const groups = navGroups(events);
+  const all = groups.flatMap((g) => g.entries);
+  const liveCount = events ? all.filter((e) => e.live).length : undefined;
+  const current = all.find((e) => location.pathname === e.to || location.pathname.startsWith(`${e.to}/`));
+  const isDataAccess = location.pathname.startsWith('/app/data');
+  const currentVersion = current && events?.find((e) => e.eventKey === current.event)?.version;
+  // Sections published beyond the built-in pages; each gets a generic page.
+  const extraSections = (events ?? []).filter((e) => !BUILT_IN_EVENTS.has(e.eventKey) && e.kind !== 'chat' && e.section);
 
   const sidebar = (
     <div className="flex h-full flex-col">
@@ -54,33 +110,51 @@ export function AppShell() {
       </div>
 
       <nav className="flex-1 space-y-0.5 px-3 py-2" aria-label="Sections">
-        <p className="px-3 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-faint">Workspace</p>
-        {TABS.map(({ path, label, icon: Icon, event }) => (
-          <NavLink
-            key={path}
-            to={`/app/${path}`}
-            title={unavailable(event) ? 'Not published yet' : undefined}
-            className={({ isActive }) =>
-              `group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
-                isActive ? 'bg-sky-500/10 font-medium text-sky-700 dark:text-sky-300' : 'text-fg-soft hover:bg-hover hover:text-fg'
-              } ${unavailable(event) ? 'opacity-50' : ''}`
-            }
-          >
-            {({ isActive }) => (
-              <>
-                {isActive && <span aria-hidden className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-sky-500" />}
-                <Icon size={16} />
-                <span className="flex-1">{label}</span>
-                {available && (
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${unavailable(event) ? 'bg-faint' : 'bg-emerald-500'}`}
-                    aria-label={unavailable(event) ? 'Not published' : 'Live'}
-                  />
+        {groups.map(({ group, entries }) => (
+          <div key={group}>
+            <p className="px-3 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-faint">{group}</p>
+            {entries.map(({ to, label, icon: Icon, live }) => (
+              <NavLink
+                key={to}
+                to={to}
+                title={live ? undefined : 'Not published yet'}
+                className={({ isActive }) =>
+                  `group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                    isActive ? 'bg-sky-500/10 font-medium text-sky-700 dark:text-sky-300' : 'text-fg-soft hover:bg-hover hover:text-fg'
+                  } ${live ? '' : 'opacity-50'}`
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    {isActive && <span aria-hidden className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-sky-500" />}
+                    <Icon size={16} />
+                    <span className="flex-1">{label}</span>
+                    {events && (
+                      <span className={`h-1.5 w-1.5 rounded-full ${live ? 'bg-emerald-500' : 'bg-faint'}`} aria-label={live ? 'Live' : 'Not published'} />
+                    )}
+                  </>
                 )}
-              </>
-            )}
-          </NavLink>
+              </NavLink>
+            ))}
+          </div>
         ))}
+
+        <NavLink
+          to="/app/data"
+          className={({ isActive }) =>
+            `group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+              isActive ? 'bg-sky-500/10 font-medium text-sky-700 dark:text-sky-300' : 'text-fg-soft hover:bg-hover hover:text-fg'
+            }`
+          }
+        >
+          {({ isActive }) => (
+            <>
+              {isActive && <span aria-hidden className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-sky-500" />}
+              <ShieldCheck size={16} />
+              <span className="flex-1">My data access</span>
+            </>
+          )}
+        </NavLink>
 
         {user?.role === 'admin' && (
           <>
@@ -97,7 +171,7 @@ export function AppShell() {
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
             </span>
-            {liveCount} of {TABS.length} sections live
+            {liveCount} of {all.length} sections live
           </p>
           <p className="mt-1 text-[11px] leading-snug text-subtle">Each section runs a published workflow.</p>
         </div>
@@ -140,8 +214,16 @@ export function AppShell() {
           </button>
           <p className="text-sm text-subtle">
             Manzil <span className="px-1 text-faint">/</span>
-            <span className="font-medium text-fg">{current?.label ?? 'Overview'}</span>
+            <span className="font-medium text-fg">{isDataAccess ? 'My data access' : (current?.label ?? 'Overview')}</span>
           </p>
+          {currentVersion !== undefined && (
+            <span
+              className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-700 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-300"
+              title="Version of the published workflow behind this page"
+            >
+              Workflow v{currentVersion}
+            </span>
+          )}
           <div className="ml-auto flex items-center gap-2">
             <button
               type="button"
@@ -161,12 +243,21 @@ export function AppShell() {
             <Route path="dashboard" element={<DashboardTab projectId={projectId} onProjectChange={setProjectId} />} />
             <Route path="activity" element={<EventTab key="activity" eventKey={EVENTS.activity} />} />
             <Route path="analytics" element={<EventTab key="analytics" eventKey={EVENTS.analytics} />} />
+            <Route path="data" element={<DataAccessTab />} />
+            {/* Any other published workflow that asked for a page of its own. */}
+            {extraSections.map((e) => (
+              <Route key={e.eventKey} path={`s/${e.eventKey}`} element={<EventTab key={e.eventKey} eventKey={e.eventKey} />} />
+            ))}
             <Route path="*" element={<Navigate to="/app/overview" replace />} />
           </Routes>
         </main>
       </div>
 
-      <AssistantWidget projectId={projectId} />
+      {/* The assistant uses the Manzil chat workflow when it is live, else any other published chat workflow. */}
+      <AssistantWidget
+        projectId={projectId}
+        chatEvent={(events ?? []).find((e) => e.eventKey === EVENTS.chat)?.eventKey ?? (events ?? []).find((e) => e.kind === 'chat')?.eventKey ?? EVENTS.chat}
+      />
     </div>
   );
 }

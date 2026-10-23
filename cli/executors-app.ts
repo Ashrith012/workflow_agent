@@ -107,6 +107,60 @@ function requireServices(ctx: ExecutionContext, node: string) {
 
 const formatMs = (ms: unknown) => (typeof ms === 'number' ? `${(ms / 1000).toFixed(1)} s` : '—');
 
+const count = (value: unknown): number | undefined => (Array.isArray(value) ? value.length : undefined);
+
+/**
+ * One plain-words sentence per executed node, so AI Activity can walk an end
+ * user through what the run actually did — what it received, searched, read
+ * and produced. Output-aware where the stored output says more (counts, categories).
+ */
+function explainStep(node: { type: string; status: string; output?: any }): string {
+  const out = isPlainObject(node.output) ? node.output : {};
+  const chunks = count(out.chunks);
+  switch (node.type) {
+    case 'UIEventTrigger':
+      return 'Received your request from the app.';
+    case 'ChatTrigger':
+      return 'Read your message and the recent conversation.';
+    case 'TextClassifier':
+      return out.classification && isPlainObject(out.classification) && out.classification.category
+        ? `Worked out what you are asking about: "${String(out.classification.category)}".`
+        : 'Worked out what kind of request this is.';
+    case 'SetFields':
+      return 'Organized the request details for the next steps.';
+    case 'Embeddings':
+      return 'Converted the question into a searchable form.';
+    case 'QdrantSearch':
+      return chunks !== undefined
+        ? `Searched the document index and found ${chunks} relevant passage${chunks === 1 ? '' : 's'}.`
+        : 'Searched the document index for relevant passages.';
+    case 'QdrantUpsert':
+      return 'Saved document passages to the search index.';
+    case 'SharePoint': {
+      const items = count(out.files) ?? count(out.items) ?? chunks;
+      return items !== undefined ? `Read ${items} item${items === 1 ? '' : 's'} from SharePoint.` : 'Read documents from SharePoint.';
+    }
+    case 'SharePointMCP':
+      return 'Used the SharePoint connector to fetch data.';
+    case 'DocumentParser':
+      return 'Extracted the text out of the documents.';
+    case 'TextSplitter':
+      return chunks !== undefined ? `Split the documents into ${chunks} passages for searching.` : 'Split the documents into passages for searching.';
+    case 'AIAgent':
+      return 'Asked the AI model to read the gathered information and write the answer.';
+    case 'RunHistory':
+      return 'Read your recent AI activity.';
+    case 'RunStats':
+      return 'Calculated usage statistics from your runs.';
+    case 'PlatformStatus':
+      return 'Checked which features are live.';
+    case 'RespondToUI':
+      return 'Prepared the answer that was shown to you.';
+    default:
+      return `Ran the ${node.type} step.`;
+  }
+}
+
 export const appExecutors: Record<string, Executor> = {
   UIEventTrigger: async (_input, params, ctx) => triggerPayload(params, ctx, {}),
 
@@ -148,13 +202,41 @@ export const appExecutors: Record<string, Executor> = {
     const all = params.scope === 'all' && ctx.user?.role === 'admin';
     const limit = Number(params.limit) > 0 ? Math.min(Number(params.limit), 500) : 50;
     const runs = services ? await services.runHistory({ userId: all ? undefined : ctx.user?.id, limit }) : MOCK_RUNS;
+    // Guardrail notes ("PII masked — policy: Mask and log") appear when any run has them.
+    const hasGuardrails = runs.some((r: any) => r.guardrails);
+    if (params.layout !== 'table' && params.layout !== 'feed') {
+      // Default: an expandable log. Each entry opens into a plain-words, step-by-step
+      // account of what the run received, searched, read and produced.
+      const log = {
+        type: 'activityLog',
+        title: params.title || 'AI Activity',
+        items: runs.map((r: any) => ({
+          title: r.label || r.workflow_name || r.event_key,
+          detail: r.workflow_name ?? r.event_key,
+          status: r.status === 'completed' ? 'Completed' : r.status === 'failed' ? 'Failed' : 'In Progress',
+          at: new Date(r.started_at).toISOString(),
+          duration: formatMs(r.duration_ms),
+          guardrails: r.guardrails ?? '',
+          ...(all ? { user: r.user_email ?? '' } : {}),
+          steps: [
+            ...(Array.isArray(r.nodes) ? r.nodes : []).map((n: any) => ({
+              text: n.status === 'failed' ? `${explainStep(n)} This step failed, so the run stopped here.` : explainStep(n),
+              status: n.status,
+              duration: formatMs(n.duration_ms),
+            })),
+            ...(r.guardrails ? [{ text: `Safety check: ${r.guardrails}.`, status: 'guardrail', duration: '' }] : []),
+          ],
+        })),
+      };
+      return mergeOutput(input, params.outputField || 'activity', log);
+    }
     if (params.layout === 'feed') {
       const feed = {
         type: 'activityFeed',
         title: params.title || 'AI Activity',
         items: runs.map((r: any) => ({
           title: r.label || r.workflow_name || r.event_key,
-          detail: r.workflow_name ?? r.event_key,
+          detail: [r.workflow_name ?? r.event_key, r.guardrails].filter(Boolean).join(' · '),
           status: r.status === 'completed' ? 'Completed' : r.status === 'failed' ? 'Failed' : 'In Progress',
           at: new Date(r.started_at).toISOString(),
           duration: formatMs(r.duration_ms),
@@ -163,7 +245,7 @@ export const appExecutors: Record<string, Executor> = {
       };
       return mergeOutput(input, params.outputField || 'activity', feed);
     }
-    const columns = ['When', 'Action', 'Status', 'Duration', ...(all ? ['User'] : [])];
+    const columns = ['When', 'Action', 'Status', 'Duration', ...(hasGuardrails ? ['Guardrails'] : []), ...(all ? ['User'] : [])];
     const block = {
       type: 'table',
       title: params.title || 'AI Activity',
@@ -174,6 +256,7 @@ export const appExecutors: Record<string, Executor> = {
           r.label || r.workflow_name || r.event_key,
           r.status === 'completed' ? 'Completed' : r.status === 'failed' ? 'Failed' : 'In Progress',
           formatMs(r.duration_ms),
+          ...(hasGuardrails ? [r.guardrails ?? '—'] : []),
           ...(all ? [r.user_email ?? ''] : []),
         ],
       })),

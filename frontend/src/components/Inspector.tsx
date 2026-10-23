@@ -1,6 +1,8 @@
 import { Trash2 } from 'lucide-react';
+import { useEffect } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { getNodeDefinition } from '../nodes/registry';
+import { modelGroups, useModelStore } from '../store/useModelStore';
 import { useWorkflowStore } from '../store/useWorkflowStore';
 import type { ParameterDefinition } from '../types';
 
@@ -11,6 +13,12 @@ export function Inspector() {
   const selected = useWorkflowStore(useShallow((s) => s.nodes.filter((n) => n.selected)));
   const updateNodeParameter = useWorkflowStore((s) => s.updateNodeParameter);
   const deleteNode = useWorkflowStore((s) => s.deleteNode);
+  const tenantModels = useModelStore((s) => s.models);
+  const loadModels = useModelStore((s) => s.load);
+
+  useEffect(() => {
+    void loadModels();
+  }, [loadModels]);
 
   const node = selected.length === 1 ? selected[0] : undefined;
   const definition = getNodeDefinition(node?.type);
@@ -37,7 +45,9 @@ export function Inspector() {
             className={`${fieldClass} resize-y font-mono text-xs leading-5`}
           />
         );
-      case 'select':
+      case 'select': {
+        // The AI Agent's model list is whatever the tenant admin authorizes, not the shipped catalog.
+        const groups = node.type === 'AIAgent' && param.key === 'model' ? modelGroups(tenantModels) : param.optionGroups;
         return (
           <select id={id} value={value} onChange={(e) => onChange(e.target.value)} className={fieldClass}>
             {param.options?.map((option) => (
@@ -45,7 +55,11 @@ export function Inspector() {
                 {option}
               </option>
             ))}
-            {param.optionGroups?.map((group) => (
+            {/* A model saved before the admin changed the catalog must stay visible, not silently switch. */}
+            {groups && value && !groups.some((g) => g.options.some((o) => o.value === value)) && (
+              <option value={value}>{value} (not authorized)</option>
+            )}
+            {groups?.map((group) => (
               <optgroup key={group.label} label={group.label}>
                 {group.options.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -56,6 +70,7 @@ export function Inspector() {
             ))}
           </select>
         );
+      }
       default:
         return (
           <input

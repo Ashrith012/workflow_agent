@@ -4,7 +4,8 @@ import { api, ApiError } from '../api/client';
 export interface User {
   id: string;
   email: string;
-  role: 'admin' | 'user';
+  /** admin = tenant admin, fde = forward deployed engineer (builder), user = end user. */
+  role: 'admin' | 'fde' | 'user';
 }
 
 interface AuthState {

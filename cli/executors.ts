@@ -35,6 +35,10 @@ export const executors: Record<string, Executor> = {
     const memory = params.memory || 'none';
     const responseFormat = params.responseFormat === 'json' ? 'json' : 'text';
 
+    // A tenant admin's own LLM carries its endpoint with the request, so adding one is
+    // a console change, not a code change. Ordinary catalog models resolve to null here.
+    const endpoint = ctx.live && ctx.services?.modelEndpoint ? await ctx.services.modelEndpoint(`${provider}:${model}`) : null;
+
     let data: any;
     try {
       // In mock mode the service echoes a mock answer instead of calling the LLM.
@@ -47,6 +51,8 @@ export const executors: Record<string, Executor> = {
           tools,
           memory,
           live: ctx.live,
+          base_url: endpoint?.baseUrl ?? '',
+          api_key: endpoint?.apiKey ?? '',
           prompt_templates: (params.promptTemplates ?? '').split(',').map((t) => t.trim()).filter(Boolean),
           system_prompt: interpolate(params.systemPrompt ?? '', input, ctx.warn),
           context: interpolate(params.context ?? '', input, ctx.warn),

@@ -77,7 +77,7 @@ test('end user cannot reach admin or builder APIs', async () => {
 
 test('the app lists only events the user may trigger', async () => {
   const keys = (await get('/api/app/events', userCookie)).json().map((e: { eventKey: string }) => e.eventKey).sort();
-  assert.deepEqual(keys, ['manzil.activity', 'manzil.analytics', 'manzil.chat', 'manzil.dashboard.load', 'manzil.domain']);
+  assert.deepEqual(keys, ['manzil.activity', 'manzil.analytics', 'manzil.chat', 'manzil.dashboard.load', 'manzil.domain', 'manzil.overview']);
   assert.equal((await event('manzil.ingest', { path: 'x' })).statusCode, 403);
   assert.equal((await event('nope')).statusCode, 404);
 });
@@ -96,7 +96,7 @@ test('a domain button returns a report and, when asked, a dashboard — never th
   const withDashboard = await event('manzil.domain', { domain: 'Material Status', projectId: 'PRJ-001', dashboard: true });
   assert.equal(withDashboard.statusCode, 200, withDashboard.body);
   const body = withDashboard.json();
-  assert.deepEqual(Object.keys(body).sort(), ['runId', 'ui']);
+  assert.deepEqual(Object.keys(body).sort(), ['runId', 'ui', 'version']);
   assert.equal(body.ui.blocks.length, 2);
   assert.ok(Object.keys(body.ui.sources).length > 0);
   assert.ok(!withDashboard.body.includes('"nodes"'));
@@ -122,10 +122,13 @@ test('chat keeps per-session history', async () => {
 
 test('AI Activity and Analytics come from workflows over the run history', async () => {
   const activity = (await event('manzil.activity')).json().ui;
-  const table = activity.blocks[0];
-  assert.equal(table.type, 'table');
-  assert.equal(table.rows.length, 4); // 2 domain reports + 2 chat turns; dashboard/activity runs have no AI Agent
-  assert.equal(table.columns.length, 4); // no User column for a non-admin, even with scope "all"
+  const log = activity.blocks[0];
+  assert.equal(log.type, 'activityLog');
+  assert.equal(log.items.length, 4); // 2 domain reports + 2 chat turns; dashboard/activity runs have no AI Agent
+  assert.ok(log.items.every((i: { user?: string }) => i.user === undefined)); // no user detail for a non-admin, even with scope "all"
+  // Every entry expands into plain-words steps of what the run did.
+  assert.ok(log.items[0].steps.length > 0);
+  assert.ok(log.items.some((i: { steps: { text: string }[] }) => i.steps.some((s) => /Asked the AI model/.test(s.text))));
 
   const analytics = (await event('manzil.analytics')).json().ui;
   assert.deepEqual(analytics.blocks.map((b: { type: string }) => b.type), ['kpiCards', 'barChart', 'table']);

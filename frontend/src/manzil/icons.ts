@@ -41,3 +41,6 @@ const ICONS: Record<string, LucideIcon> = {
 export function blockIcon(name: unknown, fallback: LucideIcon = Sparkles): LucideIcon {
   return (typeof name === 'string' && ICONS[name.toLowerCase()]) || fallback;
 }
+
+/** Icon names a workflow may pick for its page in the app's sidebar ('' keeps the default). */
+export const ICON_NAMES = ['', ...Object.keys(ICONS)];

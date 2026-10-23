@@ -17,6 +17,7 @@ import {
   Tags,
   Webhook,
 } from 'lucide-react';
+import { ICON_NAMES as APP_ICON_NAMES } from '../manzil/icons';
 import type { NodeDefinition, ParameterDefinition } from '../types';
 import { DEFAULT_EMBEDDING_MODEL, DEFAULT_MODEL, EMBEDDING_MODEL_GROUPS, MODEL_GROUPS } from './models';
 
@@ -50,11 +51,16 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
     description: 'Starts the workflow when a button in the end-user app is clicked. Set the event key and who may use it.',
     accentColor: '#22c55e',
     icon: MousePointerClick,
-    defaultParameters: { eventKey: '', allowedRoles: 'user, admin', samplePayload: '{}' },
+    defaultParameters: { eventKey: '', allowedRoles: 'user, admin', samplePayload: '{}', appSection: '', appGroup: '', appIcon: '', appOrder: '' },
     parameters: [
       { key: 'eventKey', label: 'Event key', type: 'text', placeholder: 'e.g. manzil.domain' },
       { key: 'allowedRoles', label: 'Allowed roles', type: 'text', placeholder: 'user, admin' },
       { key: 'samplePayload', label: 'Sample payload (test runs)', type: 'textarea', placeholder: '{ "domain": "Material Status" }' },
+      // The app builds its own navigation from these, so a new agent needs no front-end change.
+      { key: 'appSection', label: 'App page name', type: 'text', placeholder: 'Blank: no page of its own, e.g. Invoices' },
+      { key: 'appGroup', label: 'App group', type: 'text', placeholder: 'Sidebar heading, e.g. Manzil or Finance' },
+      { key: 'appIcon', label: 'App icon', type: 'select', options: APP_ICON_NAMES },
+      { key: 'appOrder', label: 'App order', type: 'text', placeholder: 'Sort order within the group, e.g. 10' },
     ],
   },
   {
@@ -63,10 +69,11 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
     description: 'Starts the workflow when a user sends a chat message, with the earlier messages included.',
     accentColor: '#22c55e',
     icon: MessageSquare,
-    defaultParameters: { eventKey: 'chat.message', allowedRoles: 'user, admin', samplePayload: '' },
+    defaultParameters: { eventKey: 'chat.message', allowedRoles: 'user, admin', samplePayload: '', appGroup: '' },
     parameters: [
       { key: 'eventKey', label: 'Event key', type: 'text', placeholder: 'chat.message' },
       { key: 'allowedRoles', label: 'Allowed roles', type: 'text', placeholder: 'user, admin' },
+      { key: 'appGroup', label: 'App group', type: 'text', placeholder: 'Which group this assistant answers for, e.g. Manzil' },
       {
         key: 'samplePayload',
         label: 'Sample payload (test runs)',
@@ -290,12 +297,12 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
     description: 'Lists recent workflow runs, for the AI Activity page.',
     accentColor: '#64748b',
     icon: History,
-    defaultParameters: { scope: 'mine', limit: '50', title: 'AI Activity', layout: 'table', outputField: 'activity' },
+    defaultParameters: { scope: 'mine', limit: '50', title: 'AI Activity', layout: 'detailed', outputField: 'activity' },
     parameters: [
       { key: 'scope', label: 'Scope', type: 'select', options: ['mine', 'all'] },
       { key: 'limit', label: 'Limit', type: 'text', placeholder: '50' },
       { key: 'title', label: 'Title', type: 'text', placeholder: 'AI Activity' },
-      { key: 'layout', label: 'Layout', type: 'select', options: ['table', 'feed'] },
+      { key: 'layout', label: 'Layout', type: 'select', options: ['detailed', 'table', 'feed'] },
       outputField('activity'),
     ],
   },

@@ -1,5 +1,5 @@
-import { ArrowRight, CircleCheck, CircleDashed, CircleHelp, CircleX, ExternalLink, Gauge, Workflow, type LucideIcon } from 'lucide-react';
-import { createContext, useContext, type ReactNode } from 'react';
+import { ArrowRight, ChevronRight, CircleCheck, CircleDashed, CircleHelp, CircleX, ExternalLink, Gauge, ShieldCheck, Workflow, type LucideIcon } from 'lucide-react';
+import { createContext, useContext, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Sparkline } from './charts';
 import { ExecutiveDashboard } from './ExecutiveDashboard';
@@ -319,6 +319,75 @@ function ActivityFeedBlock({ block }: { block: Block }) {
   );
 }
 
+/**
+ * Expandable run log for the AI Activity page. The ">" chevron on each entry
+ * opens a plain-words, step-by-step account of what that run did: what it
+ * received, searched, read and produced, plus any guardrail outcome.
+ */
+function ActivityLogItem({ item }: { item: Record<string, unknown> }) {
+  const [open, setOpen] = useState(false);
+  const steps = Array.isArray(item.steps) ? (item.steps as Record<string, unknown>[]) : [];
+  return (
+    <li className="border-t border-line first:border-t-0">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-hover"
+      >
+        <ChevronRight size={15} aria-hidden className={`shrink-0 text-subtle transition-transform ${open ? 'rotate-90' : ''}`} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium text-fg">{str(item.title)}</span>
+          <span className="block truncate text-xs text-subtle">
+            {[timeAgo(str(item.at)), str(item.duration), str(item.user), str(item.guardrails)].filter(Boolean).join(' · ')}
+          </span>
+        </span>
+        {item.status ? <StatusPill value={str(item.status)} /> : null}
+      </button>
+      {open && (
+        <ol className="space-y-2 border-t border-line/60 bg-page/60 py-3 pl-[46px] pr-4">
+          {steps.length === 0 && <li className="text-xs text-muted">No step detail was recorded for this run.</li>}
+          {steps.map((s, i) => {
+            const failed = s.status === 'failed';
+            const guardrail = s.status === 'guardrail';
+            return (
+              <li key={i} className="flex items-start gap-2.5 text-xs">
+                <span
+                  className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold ${
+                    failed
+                      ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
+                      : guardrail
+                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                        : 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300'
+                  }`}
+                >
+                  {guardrail ? <ShieldCheck size={10} aria-hidden /> : i + 1}
+                </span>
+                <span className={`flex-1 leading-relaxed ${failed ? 'text-red-700 dark:text-red-300' : 'text-fg-soft'}`}>{str(s.text)}</span>
+                {str(s.duration) && <span className="shrink-0 tabular-nums text-faint">{str(s.duration)}</span>}
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </li>
+  );
+}
+
+function ActivityLogBlock({ block }: { block: Block }) {
+  const items = Array.isArray(block.items) ? (block.items as Record<string, unknown>[]) : [];
+  return (
+    <BlockFrame title={block.title} description={block.description}>
+      <ul className="overflow-hidden rounded-xl border border-line bg-panel shadow-sm">
+        {items.length === 0 && <li className="px-3 py-4 text-sm text-muted">No activity yet. Run an action to get started.</li>}
+        {items.map((item, i) => (
+          <ActivityLogItem key={i} item={item} />
+        ))}
+      </ul>
+    </BlockFrame>
+  );
+}
+
 interface FormProps {
   form?: FormState;
   onFormChange?: (name: string, value: string | boolean) => void;
@@ -448,6 +517,8 @@ function renderBlock(block: Block, i: number, formProps: FormProps) {
       return <StatusListBlock key={i} block={block} />;
     case 'activityFeed':
       return <ActivityFeedBlock key={i} block={block} />;
+    case 'activityLog':
+      return <ActivityLogBlock key={i} block={block} />;
     case 'select':
       return <SelectBlock key={i} block={block} {...formProps} />;
     case 'toggle':

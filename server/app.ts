@@ -2,12 +2,14 @@
 import cors from '@fastify/cors';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { RunMode } from '../frontend/src/types.js';
-import { authRoutes, registerAuth, requireAdmin, seedAdmin } from './auth.js';
+import { authRoutes, registerAuth, requireBuilder, seedAdmin } from './auth.js';
 import { createDb, type Db } from './db/index.js';
-import { createServices } from './platform.js';
+import { createServices, seedTenantModels } from './platform.js';
 import { adminRoutes } from './routes/admin.js';
 import { appRoutes } from './routes/app.js';
+import { fdeRoutes } from './routes/fde.js';
 import { runRoutes, type RunRoutesOptions } from './routes/run.js';
+import { tenantRoutes } from './routes/tenant.js';
 
 const DEV_ORIGIN = 'http://localhost:5173';
 
@@ -50,17 +52,20 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
   app.log.info(`database: ${'kind' in db ? db.kind : 'injected'}`);
   if (!options.db) app.addHook('onClose', () => db.close());
   await seedAdmin(db, app.log);
+  await seedTenantModels(db);
   const services = createServices(db);
 
   await registerAuth(app);
   await app.register(authRoutes, { db });
   await app.register(adminRoutes, { db });
+  await app.register(tenantRoutes, { db });
+  await app.register(fdeRoutes, { db });
   const appRunMode = options.appRunMode ?? (process.env.APP_RUN_MODE === 'mock' ? 'mock' : 'live');
   await app.register(appRoutes, { db, services, mode: appRunMode });
 
-  // The builder's test runs execute arbitrary workflows: administrators only.
+  // The builder's test runs execute arbitrary workflows: FDEs and administrators only.
   await app.register(async (scope) => {
-    scope.addHook('preHandler', requireAdmin);
+    scope.addHook('preHandler', requireBuilder);
     await scope.register(runRoutes, { timeoutMs: options.timeoutMs, services });
   });
   return app;

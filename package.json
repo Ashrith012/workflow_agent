@@ -18,6 +18,7 @@
     "test:agent": "python -m pytest tests/",
     "test:nodes": "tsx --test tests/nodes.test.ts",
     "test:server": "tsx --test tests/server.test.ts",
+    "test:tenant": "tsx --test tests/tenant.test.ts",
     "ingest": "tsx --env-file-if-exists=.env cli/ingest.ts",
     "db": "tsx --env-file-if-exists=.env cli/db.ts"
   },
