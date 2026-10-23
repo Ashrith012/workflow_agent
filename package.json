@@ -16,14 +16,14 @@
     "check:server": "tsc --noEmit -p server/tsconfig.json",
     "check:registry": "tsx cli/check-registry.ts",
     "test:agent": "python -m pytest tests/",
-    "test:nodes": "tsx --test tests/nodes.test.ts",
-    "test:server": "tsx --test tests/server.test.ts",
-    "test:tenant": "tsx --test tests/tenant.test.ts",
+    "test:nodes": "tsx --env-file-if-exists=.env --test tests/nodes.test.ts",
+    "test:server": "tsx --env-file-if-exists=.env --test tests/server.test.ts",
+    "test:tenant": "tsx --env-file-if-exists=.env --test tests/tenant.test.ts",
     "ingest": "tsx --env-file-if-exists=.env cli/ingest.ts",
-    "db": "tsx --env-file-if-exists=.env cli/db.ts"
+    "db": "tsx --env-file-if-exists=.env cli/db.ts",
+    "repair:db": "tsx --env-file-if-exists=.env cli/repair-db.ts"
   },
   "dependencies": {
-    "@electric-sql/pglite": "^0.5.11",
     "@fastify/cookie": "^11.1.3",
     "@fastify/cors": "^11.3.1",
     "@fastify/jwt": "^10.2.5",

@@ -18,7 +18,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 
 export interface BuildServerOptions extends RunRoutesOptions {
   logger?: boolean;
-  /** Defaults to createDb() (DATABASE_URL, else embedded PGlite). */
+  /** Defaults to createDb() (DATABASE_URL). */
   db?: Db;
   /** Mode for published-workflow runs from the app; defaults to APP_RUN_MODE or live. */
   appRunMode?: RunMode;

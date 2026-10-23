@@ -342,12 +342,11 @@ export const appExecutors: Record<string, Executor> = {
     const days = Number(params.days) > 0 ? Math.min(Number(params.days), 365) : 30;
     const s: any = services ? await services.runStats({ userId: all ? undefined : ctx.user?.id, days }) : MOCK_STATS;
     const successRate = s.total ? `${Math.round((s.completed / s.total) * 100)}%` : '—';
-    const trend = s.byDay.map((d: any) => d.total);
     const kpis = {
       type: 'kpiCards',
       title: `Last ${days} days`,
+      // Request volume is the "Requests per day" bar chart below, so it gets no card of its own.
       cards: [
-        { title: 'AI requests', value: String(s.total), description: `${s.failed} failed`, tone: 'blue', icon: 'activity', trend },
         { title: 'Success rate', value: successRate, description: 'Completed runs', tone: 'green', icon: 'check' },
         { title: 'Avg response time', value: formatMs(s.avgMs), description: 'End-to-end', tone: 'orange', icon: 'clock' },
         ...(all ? [{ title: 'Active users', value: String(s.users), description: 'Distinct users', tone: 'grey', icon: 'users' }] : []),

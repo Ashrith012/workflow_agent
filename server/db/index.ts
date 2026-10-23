@@ -1,10 +1,8 @@
 /**
- * PostgreSQL access. Uses DATABASE_URL when set; otherwise an embedded PGlite
- * database (Postgres compiled to WASM) under .data/pglite, so local development
- * and tests need no database server. Both speak the same SQL and $n parameters.
+ * PostgreSQL access. DATABASE_URL points at the platform database; it is required.
+ * Queries use $n parameters.
  */
 import { readFileSync } from 'node:fs';
-import { mkdir } from 'node:fs/promises';
 
 export interface Db {
   query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
@@ -13,37 +11,41 @@ export interface Db {
 
 const SCHEMA = readFileSync(new URL('./schema.sql', import.meta.url), 'utf8');
 
-/** `dataDir: 'memory://'` gives a throwaway in-memory database (tests). */
-export async function createDb(options: { url?: string; dataDir?: string } = {}): Promise<Db & { kind: string }> {
+/**
+ * `schema: 'wf_test_x'` puts the tables in their own PostgreSQL schema and drops it
+ * on close, so tests get a throwaway database inside the same server.
+ */
+export async function createDb(options: { url?: string; schema?: string } = {}): Promise<Db & { kind: string }> {
   const url = options.url ?? process.env.DATABASE_URL;
-  let db: Db & { kind: string };
+  if (!url) throw new Error('DATABASE_URL is not set. Point it at a PostgreSQL database, e.g. postgresql://user:pass@host:5432/db');
 
-  if (url) {
-    const { default: pg } = await import('pg');
-    const pool = new pg.Pool({ connectionString: url, max: 10 });
-    await pool.query(SCHEMA);
-    db = {
-      kind: 'postgres',
-      query: async (sql, params) => (await pool.query(sql, params as unknown[])).rows,
-      close: () => pool.end(),
-    };
-  } else {
-    const { PGlite } = await import('@electric-sql/pglite');
-    const dataDir = options.dataDir ?? process.env.PGLITE_DIR ?? '.data/pglite';
-    if (!dataDir.startsWith('memory://')) await mkdir(dataDir, { recursive: true });
-    const lite = await PGlite.create(dataDir);
-    await lite.exec(SCHEMA);
-    // PGlite runs one statement at a time; serialize so concurrent requests never interleave.
-    let queue: Promise<unknown> = Promise.resolve();
-    db = {
-      kind: `pglite (${dataDir})`,
-      query: <T,>(sql: string, params?: unknown[]) => {
-        const next = queue.then(async () => (await lite.query<T>(sql, params)).rows);
-        queue = next.catch(() => undefined);
-        return next;
-      },
-      close: () => lite.close(),
-    };
+  const { default: pg } = await import('pg');
+  const schema = options.schema;
+  if (schema && !/^[a-z_][a-z0-9_]*$/.test(schema)) throw new Error(`invalid schema name: ${schema}`);
+
+  if (schema) {
+    const setup = new pg.Pool({ connectionString: url, max: 1 });
+    try {
+      await setup.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+      await setup.query(`CREATE SCHEMA ${schema}`);
+    } finally {
+      await setup.end();
+    }
   }
-  return db;
+
+  const pool = new pg.Pool({
+    connectionString: url,
+    max: 10,
+    ...(schema ? { options: `-c search_path=${schema}` } : {}),
+  });
+  await pool.query(SCHEMA);
+
+  return {
+    kind: schema ? `postgres (schema ${schema})` : 'postgres',
+    query: async (sql, params) => (await pool.query(sql, params as unknown[])).rows,
+    close: async () => {
+      if (schema) await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+      await pool.end();
+    },
+  };
 }

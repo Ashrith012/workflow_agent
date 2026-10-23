@@ -61,9 +61,12 @@ def test_prompts_endpoint_lists_templates():
 
 
 def test_embeddings_mock_is_deterministic_and_sized():
+    # Follows the catalog's default rather than pinning one model, so changing it is a one-file edit.
+    default = MODELS["default_embedding_model"]
+    _, _, dimensions = EmbeddingsTool(MODELS).resolve("")
     body = client.post("/embeddings", json={"texts": ["a", "b", "a"], "live": False}).json()
-    assert body["model"] == "gemini:gemini-embedding-2" and body["dimensions"] == 3072
-    assert len(body["vectors"]) == 3 and len(body["vectors"][0]) == 3072
+    assert body["model"] == default and body["dimensions"] == dimensions
+    assert len(body["vectors"]) == 3 and len(body["vectors"][0]) == dimensions
     assert body["vectors"][0] == body["vectors"][2] != body["vectors"][1]
 
 

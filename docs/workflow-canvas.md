@@ -145,7 +145,7 @@ Example output:
   "name": "My Workflow",
   "nodes": [
     { "id": "node_1", "type": "WebhookTrigger", "position": { "x": 0, "y": 0 }, "parameters": { "path": "/v1/test" } },
-    { "id": "node_2", "type": "AIAgent", "position": { "x": 320, "y": 0 }, "parameters": { "model": "groq:openai/gpt-oss-20b", "prompt": "Summarize: {{ $json.body.text }}", "tools": "web_search" } }
+    { "id": "node_2", "type": "AIAgent", "position": { "x": 320, "y": 0 }, "parameters": { "model": "selfhosted:qwen2.5:7b", "prompt": "Summarize: {{ $json.body.text }}", "tools": "web_search" } }
   ],
   "edges": [{ "id": "edge_1", "source": "node_1", "target": "node_2" }]
 }
@@ -175,7 +175,7 @@ The scripts load API keys from a git-ignored `.env` file in the project root (co
 
 There is one LLM node, **AI Agent**. Its **Model** dropdown lists every model from every provider, grouped by provider, and the provider is implied by the model you pick. The node is executed by the Python service in `src/` (see [agent service](agent-service.md)): `cli/executors.ts` POSTs `{ provider, model, prompt, tools, memory, live }` to `AGENT_SERVICE_URL` (default `http://localhost:8000`) `/agent/execute`.
 
-The model list comes from **`config/models.json`**, which both the UI (`frontend/src/nodes/models.ts`) and the Python service read. A node stores the model as `<provider>:<model id>`, e.g. `groq:openai/gpt-oss-20b`.
+The model list comes from **`config/models.json`**, which both the UI (`frontend/src/nodes/models.ts`) and the Python service read. A node stores the model as `<provider>:<model id>`, e.g. `selfhosted:qwen2.5:7b`. The default provider is Ollama. A model entry may carry its own `base_url`/`base_url_env`, so models on the shared GPU box (`SELFHOSTED_REMOTE_BASE_URL`) and on this machine (`SELFHOSTED_BASE_URL`, default `http://localhost:11434/v1`) sit side by side under one provider. The hosted providers stay in the catalog but each needs its own API key.
 
 | Provider | Key | Models |
 | --- | --- | --- |

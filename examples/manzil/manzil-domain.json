@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "name": "Manzil — Domain report (dashboard buttons)",
+  "name": "Manzil - Domain report (dashboard buttons)",
   "nodes": [
     {
       "id": "domain_trigger",
@@ -35,7 +35,7 @@
         "y": 120
       },
       "parameters": {
-        "model": "gemini:gemini-embedding-2",
+        "model": "selfhosted:nomic-embed-text",
         "text": "{{ $json.classification.category }}: {{ $json.message }}",
         "itemsField": "",
         "textKey": "text",
@@ -85,7 +85,7 @@
         "y": 340
       },
       "parameters": {
-        "model": "groq:openai/gpt-oss-120b",
+        "model": "selfhosted:qwen2.5:7b",
         "tools": "",
         "promptTemplates": "manzil_v2, manzil_ui_output",
         "systemPrompt": "",
@@ -108,11 +108,11 @@
         "y": 340
       },
       "parameters": {
-        "model": "groq:openai/gpt-oss-120b",
+        "model": "selfhosted:qwen2.5:7b",
         "tools": "",
         "promptTemplates": "manzil_dashboard",
         "systemPrompt": "",
-        "prompt": "Build the executive dashboard data for: {{ $json.classification.category }} — {{ $json.message }}",
+        "prompt": "Build the executive dashboard data for: {{ $json.classification.category }} - {{ $json.message }}",
         "context": "Report:\n{{ $json.report }}",
         "historyField": "",
         "responseFormat": "json",

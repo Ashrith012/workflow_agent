@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "name": "Manzil — Ingest SharePoint into Qdrant",
+  "name": "Manzil - Ingest SharePoint into Qdrant",
   "nodes": [
     {
       "id": "ingest_trigger",
@@ -69,7 +69,7 @@
         "y": 120
       },
       "parameters": {
-        "model": "gemini:gemini-embedding-2",
+        "model": "selfhosted:nomic-embed-text",
         "text": "",
         "itemsField": "chunks",
         "textKey": "text",

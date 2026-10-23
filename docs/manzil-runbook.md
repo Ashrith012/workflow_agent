@@ -44,9 +44,11 @@ python -m pip install -r requirements.txt
 | --- | --- | --- |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Your choice; creates the first admin on first start | Login |
 | `JWT_SECRET` | Generate: `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` | Keeps people signed in across restarts (blank = signed out on every restart) |
-| `DATABASE_URL` | `postgresql://user:pass@host:5432/db`; blank = embedded PGlite in `.data/pglite` (single machine, dev only) | Users, published workflows, runs, chat |
+| `DATABASE_URL` | `postgresql://user:pass@host:5432/db` — required; the server will not start without it | Users, published workflows, runs, chat |
 | `APP_RUN_MODE` | `live` (real calls) or `mock` (demo without any API calls) | End-user app |
-| `GEMINI_API_KEY` | https://aistudio.google.com/apikey | Embeddings (`gemini-embedding-2`) |
+| `GEMINI_API_KEY` | https://aistudio.google.com/apikey | Only if an Embeddings node is switched off the local default |
+| `SELFHOSTED_BASE_URL` | Ollama on this machine, default `http://localhost:11434/v1` | Embeddings (`nomic-embed-text`) and the local chat models |
+| `SELFHOSTED_REMOTE_BASE_URL` | The shared GPU Ollama box; a trycloudflare tunnel gets a new URL on every restart | The default chat model `qwen2.5:7b` and the other shared-box models |
 | `GROQ_API_KEY` | https://console.groq.com/keys | Report + dashboard agents (`gpt-oss-120b`) and the chat classifier fallback |
 | `QDRANT_URL` | Qdrant Cloud → cluster → **Endpoint** (`https://….cloud.qdrant.io`) | Search + ingestion |
 | `QDRANT_API_KEY` | Qdrant Cloud → cluster → **API Keys** | Search + ingestion |
@@ -81,7 +83,7 @@ UI Event Trigger {path, projectId}
   → SharePoint getFolderFiles   every file under the folder (subfolders included, files up to 25 MB, 6 downloads at a time)
   → Document Parser             PDF / DOCX / XLSX → text
   → Text Splitter               2,500-character chunks, 250 overlap, tagged with project_id
-  → Embeddings                  gemini-embedding-2, 3072 dimensions, 100 chunks per call
+  → Embeddings                  nomic-embed-text, 768 dimensions, 100 chunks per call
   → Qdrant Upsert               into project_documents; keyword indexes on project_id and doc_type
   → Respond to UI               summary
 ```
@@ -169,7 +171,7 @@ Nothing is visible to end users until it is published.
 | Node | Setting | Value |
 | --- | --- | --- |
 | Qdrant Search (dashboard-load, domain, chat) | Collection | `project_documents` |
-| Embeddings (domain, chat) | Model | `gemini-embedding-2`. Must be the model used for ingestion |
+| Embeddings (domain, chat) | Model | `selfhosted:nomic-embed-text`. Must be the model used for ingestion |
 | SharePoint MCP (domain, chat) | Tool | Your MCP server's search tool (run the node with Operation `listTools` to see the names). The template says `search_documents` |
 | AI Agent ×2 (domain, chat) | Model | `GPT-OSS 120B` (Groq), or `Gemini 3.8 Flash` if you prefer one key |
 

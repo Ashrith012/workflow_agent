@@ -6,7 +6,7 @@ import type { OptionGroup } from '../types';
  * Python agent service, which uses it to route each model to its provider —
  * adding a provider or model there is all it takes to offer it here.
  *
- * Model values are `<provider>:<model id>`, e.g. `groq:openai/gpt-oss-20b`.
+ * Model values are `<provider>:<model id>`, e.g. `selfhosted:qwen2.5:3b-instruct`.
  */
 export const DEFAULT_MODEL = catalog.default_model;
 

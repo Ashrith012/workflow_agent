@@ -128,7 +128,9 @@ test('RunHistory feed layout and RunStats kpis layout', async () => {
 
   const { analytics } = await executors.RunStats({}, { layout: 'kpis' }, ctx());
   assert.equal(analytics.type, 'kpiCards');
-  assert.deepEqual(analytics.cards[0].trend, [18, 24]);
+  // No request-count card: the bar chart carries volume.
+  assert.deepEqual(analytics.cards.map((c: { title: string }) => c.title), ['Success rate', 'Avg response time']);
+  assert.equal(analytics.cards[0].value, '93%'); // 39 of 42 completed
 });
 
 test('PlatformStatus reports health and the workflows the role can run', async () => {

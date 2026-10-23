@@ -21,7 +21,7 @@
         "y": 204
       },
       "parameters": {
-        "model": "openai:gpt-4o-mini",
+        "model": "selfhosted:qwen2.5:7b",
         "prompt": "",
         "tools": ""
       }

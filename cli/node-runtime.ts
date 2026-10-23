@@ -61,7 +61,7 @@ export function splitModel(params: Record<string, string>): { provider: string; 
   const value = params.model ?? '';
   const colon = value.indexOf(':');
   if (colon > 0) return { provider: value.slice(0, colon), model: value.slice(colon + 1) };
-  return { provider: params.provider || 'groq', model: value };
+  return { provider: params.provider || 'selfhosted', model: value };
 }
 
 export class AgentServiceUnreachable extends Error {}

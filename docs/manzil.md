@@ -42,9 +42,9 @@ Services:
 | --- | --- |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Creates the first administrator on start, when no users exist |
 | `JWT_SECRET` | Signs session cookies; required in production |
-| `DATABASE_URL` | PostgreSQL connection. Blank uses embedded PGlite in `.data/pglite`, for development only |
+| `DATABASE_URL` | PostgreSQL connection. Required |
 | `GEMINI_API_KEY` | Gemini embeddings and chat models; use the embedding model configured in the workflows |
-| `GROQ_API_KEY` | Report and dashboard agents using `groq:openai/gpt-oss-120b`; switch them to a Gemini model to use only one model-provider key |
+| `GROQ_API_KEY` | Only if an AI Agent node is switched off the local default to a Groq model |
 | `QDRANT_URL`, `QDRANT_API_KEY` | Vector store |
 | `SHAREPOINT_*` | Graph connector for ingestion |
 | `SHAREPOINT_MCP_URL`, `SHAREPOINT_MCP_TOKEN` | SharePoint MCP server |
@@ -58,7 +58,7 @@ Services:
 3. Check these settings, then test-run the workflow with **Run**, using Mock first and then Live:
    - **Qdrant collection:** The templates use `project_documents`. Set this to your collection. Search reads chunk text from the `text` payload field or `page_content`, and reads `project_id`, `doc_name`, `url`, `version`, and `modified` for filtering and citations.
    - **SharePoint MCP tool name:** The templates use `search_documents`. Run the node with operation `listTools` to see your server's tools.
-   - **Models:** The report and dashboard use `groq:openai/gpt-oss-120b`. Check `config/models.json` and the embedding nodes in the ingestion, chat, and domain workflows for the configured embedding model.
+   - **Models:** The report and dashboard use `selfhosted:qwen2.5:7b` on the shared GPU Ollama box (`SELFHOSTED_REMOTE_BASE_URL`). Check `config/models.json` and the embedding nodes in the ingestion, chat, and domain workflows for the configured embedding model.
 4. Publish each workflow with **Publish** next to its template or **Publish canvas** after editing it.
 5. Create end users under **Users**.
 

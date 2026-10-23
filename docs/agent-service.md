@@ -35,7 +35,7 @@ uvicorn src.main:app --reload --port 8000
     "live": true
   }
   ```
-  `model` may instead be `"groq:openai/gpt-oss-20b"` with no `provider`. `live: false` returns a mock answer without calling the LLM.
+  `model` may instead be `"selfhosted:qwen2.5:7b"` with no `provider`. `live: false` returns a mock answer without calling the LLM.
   Returns `{ "text": "..." }`. Errors: 400 for an unknown provider or a missing API key, 502 when the LLM call fails.
 - `POST /connectors/sharepoint`: runs a SharePoint node (`src/tools/sharepoint.py`) against Microsoft Graph.
   ```json

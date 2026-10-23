@@ -127,10 +127,19 @@ class SharePointRequest(BaseModel):
     live: bool = Field(default=True, description="False returns mock data without calling SharePoint")
 
 
-def provider_base_url(spec: Dict[str, Any]) -> str:
-    """The provider's endpoint. A `base_url_env` lets a self-hosted URL move without editing the catalog."""
-    env_name = spec.get("base_url_env")
-    return (env_name and os.getenv(env_name)) or spec["base_url"]
+def provider_base_url(spec: Dict[str, Any], model: str = "") -> str:
+    """
+    The endpoint for `model` under `spec`: the model's own base_url when it sits on a different
+    host than the rest of the provider, else the provider's. A `base_url_env` lets either move
+    without editing the catalog.
+    """
+    source = spec
+    for entry in spec.get("models") or []:
+        if entry.get("id") == model and (entry.get("base_url") or entry.get("base_url_env")):
+            source = entry
+            break
+    env_name = source.get("base_url_env")
+    return (env_name and os.getenv(env_name)) or source["base_url"]
 
 
 def provider_api_key(spec: Dict[str, Any]) -> Optional[str]:
@@ -156,7 +165,7 @@ def provider_spec(provider: str, base_url: str = "") -> Dict[str, Any]:
 
 
 def resolve_model(provider: Optional[str], model: Optional[str], base_url: str = "") -> tuple[str, str]:
-    """Returns (provider, model id). Accepts `groq` + `openai/gpt-oss-20b` or `groq:openai/gpt-oss-20b`."""
+    """Returns (provider, model id). Accepts `selfhosted` + `qwen3:8b` or `selfhosted:qwen3:8b`."""
     if model and ":" in model and not provider:
         provider, model = model.split(":", 1)
     if not provider:
@@ -251,7 +260,7 @@ async def chat(
     spec = provider_spec(provider, base_url or "")
     # Every provider speaks the OpenAI chat-completions API. base_url overrides let a
     # tenant admin point a self-hosted model at their own endpoint without a code change.
-    client = AsyncOpenAI(api_key=api_key, base_url=base_url or provider_base_url(spec), timeout=TIMEOUT_S)
+    client = AsyncOpenAI(api_key=api_key, base_url=base_url or provider_base_url(spec, model), timeout=TIMEOUT_S)
     kwargs: Dict[str, Any] = {}
     if "temperature" in AGENT_CONFIG:
         kwargs["temperature"] = AGENT_CONFIG["temperature"]

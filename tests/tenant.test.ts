@@ -1,7 +1,7 @@
 /**
  * Tenant Admin / FDE split: role separation, submit-for-approval publishing,
  * dynamic guardrail policies (PII masking/blocking on live runs), models,
- * connectors and the audit log. In-memory PGlite, mock mode; no agent service
+ * connectors and the audit log. Throwaway PostgreSQL schema (DATABASE_URL), mock mode; no agent service
  * needed — the PII workflow uses only offline nodes.
  *   npm run test:tenant
  */
@@ -61,7 +61,7 @@ const PII_WORKFLOW = {
 };
 
 before(async () => {
-  db = await createDb({ dataDir: 'memory://' });
+  db = await createDb({ schema: 'wf_test_tenant' });
   app = await buildServer({ logger: false, db, appRunMode: 'mock' });
   adminCookie = await login('admin@example.com', 'admin-password');
   for (const [email, role] of [['fde@example.com', 'fde'], ['user@example.com', 'user']]) {
@@ -72,7 +72,10 @@ before(async () => {
   userCookie = await login('user@example.com', 'test-password');
 });
 
-after(() => app.close());
+after(async () => {
+  await app?.close();
+  await db?.close();
+});
 
 test('roles are separated: fde builds, admin governs, user sees neither console', async () => {
   // FDE may use the builder APIs but not the tenant console or the end-user app.

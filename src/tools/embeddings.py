@@ -54,15 +54,21 @@ class EmbeddingsTool:
         spec = self.catalog["providers"].get(provider)
         if spec is None:
             raise EmbeddingsError(f"Provider '{provider}' has no entry under 'providers' in config/models.json.")
-        api_key = os.getenv(spec["api_key_env"])
+        # A self-hosted provider (Ollama) has no api_key_env and needs no key; OpenAI clients
+        # still require some value, so it gets a placeholder.
+        key_env = spec.get("api_key_env")
+        api_key = os.getenv(key_env) if key_env else "self-hosted"
         if not api_key:
-            raise EmbeddingsError(f"{spec['api_key_env']} is not set; add it to .env and restart the agent service, or run in mock mode.")
+            raise EmbeddingsError(f"{key_env} is not set; add it to .env and restart the agent service, or run in mock mode.")
+        # `base_url_env` lets a self-hosted endpoint move without editing the catalog.
+        url_env = spec.get("base_url_env")
+        base_url = (url_env and os.getenv(url_env)) or spec["base_url"]
 
         from openai import AsyncOpenAI, RateLimitError
 
         # The SDK retries transient 5xx; 429s are handled below with the provider's own retry delay
         # (free tiers allow ~100 texts/minute, so large ingestion runs wait out each window).
-        client = AsyncOpenAI(api_key=api_key, base_url=spec["base_url"], timeout=self.timeout, max_retries=2)
+        client = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=self.timeout, max_retries=2)
         vectors: List[List[float]] = []
         for start in range(0, len(texts), BATCH_SIZE):
             # The API rejects empty strings; a single space embeds to a neutral vector.

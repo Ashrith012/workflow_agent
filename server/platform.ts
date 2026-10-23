@@ -78,17 +78,33 @@ export class RunRecorder {
  */
 export async function seedTenantModels(db: Db): Promise<void> {
   const catalog = JSON.parse(readFileSync(new URL('../config/models.json', import.meta.url), 'utf8')) as {
-    providers?: Record<string, { label?: string; models?: { id: string; label: string }[]; self_hosted?: boolean; base_url?: string }>;
+    providers?: Record<
+      string,
+      {
+        label?: string;
+        models?: { id: string; label: string; base_url?: string; base_url_env?: string }[];
+        self_hosted?: boolean;
+        base_url?: string;
+        base_url_env?: string;
+      }
+    >;
+  };
+  /** The endpoint a self-hosted entry answers on: its own, else the provider's; an env var wins over both. */
+  const endpoint = (entry: { base_url?: string; base_url_env?: string }, fallback: { base_url?: string; base_url_env?: string }) => {
+    const def = entry.base_url || entry.base_url_env ? entry : fallback;
+    return ((def.base_url_env && process.env[def.base_url_env]) || def.base_url) ?? '';
   };
   for (const [provider, def] of Object.entries(catalog.providers ?? {})) {
-    // A self-hosted catalog provider (e.g. the Ollama endpoint) reaches the agent service
-    // through its own base_url, which SELFHOSTED_BASE_URL can override at run time.
+    // A self-hosted catalog provider (e.g. an Ollama endpoint) reaches the agent service through
+    // its own base_url, which SELFHOSTED_BASE_URL can override at run time. Models on a different
+    // Ollama host carry their own base_url in the catalog.
     const kind = def.self_hosted ? 'selfhosted' : 'hosted';
     for (const m of def.models ?? []) {
       await db.query(
         `INSERT INTO tenant_models (model_key, name, provider, kind, base_url) VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (model_key) DO UPDATE SET kind = EXCLUDED.kind WHERE tenant_models.kind <> EXCLUDED.kind`,
-        [`${provider}:${m.id}`, m.label, def.label ?? provider, kind, def.self_hosted ? (def.base_url ?? '') : ''],
+         ON CONFLICT (model_key) DO UPDATE SET kind = EXCLUDED.kind, base_url = EXCLUDED.base_url
+         WHERE tenant_models.kind <> EXCLUDED.kind OR tenant_models.base_url <> EXCLUDED.base_url`,
+        [`${provider}:${m.id}`, m.label, def.label ?? provider, kind, def.self_hosted ? endpoint(m, def) : ''],
       );
     }
   }

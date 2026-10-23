@@ -21,7 +21,7 @@
         "y": 210
       },
       "parameters": {
-        "model": "groq:openai/gpt-oss-20b",
+        "model": "selfhosted:qwen2.5:7b",
         "prompt": "Summarize: {{ $json.body.text }}",
         "tools": ""
       }

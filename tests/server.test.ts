@@ -1,6 +1,7 @@
 /**
  * End-to-end API test: publish the Manzil workflows as admin, then use them as
- * an end user. In-memory PGlite, mock mode; needs the agent service on :8000.
+ * an end user. Throwaway PostgreSQL schema (DATABASE_URL), mock mode; needs the
+ * agent service on :8000.
  *   npm run dev:agent   # in another terminal
  *   npm run test:server
  */
@@ -16,6 +17,7 @@ process.env.ADMIN_PASSWORD = 'admin-password';
 process.env.JWT_SECRET = 'test-secret';
 
 let app: FastifyInstance;
+let db: Awaited<ReturnType<typeof createDb>>;
 let adminCookie = '';
 let userCookie = '';
 
@@ -34,11 +36,15 @@ const get = (url: string, cookie: string) => app.inject({ method: 'GET', url, he
 const event = (key: string, payload: unknown = {}, extra: object = {}) => post(`/api/app/events/${key}`, userCookie, { payload, ...extra });
 
 before(async () => {
-  app = await buildServer({ logger: false, db: await createDb({ dataDir: 'memory://' }), appRunMode: 'mock' });
+  db = await createDb({ schema: 'wf_test_server' });
+  app = await buildServer({ logger: false, db, appRunMode: 'mock' });
   adminCookie = await login('admin@example.com', 'admin-password');
 });
 
-after(() => app.close());
+after(async () => {
+  await app?.close();
+  await db?.close();
+});
 
 test('unauthenticated and non-admin access is refused', async () => {
   assert.equal((await app.inject({ method: 'POST', url: '/api/run', payload: {} })).statusCode, 401);
@@ -155,7 +161,9 @@ test('AI Activity and Analytics come from workflows over the run history', async
 
   const analytics = (await event('manzil.analytics')).json().ui;
   assert.deepEqual(analytics.blocks.map((b: { type: string }) => b.type), ['kpiCards', 'barChart', 'table']);
-  assert.equal(analytics.blocks[0].cards[0].value, '4');
+  // The request-count card is gone; the bar chart below still totals the same 4 runs.
+  assert.deepEqual(analytics.blocks[0].cards.map((c: { title: string }) => c.title), ['Success rate', 'Avg response time']);
+  assert.equal(analytics.blocks[1].values.reduce((a: number, b: number) => a + b, 0), 4);
 });
 
 test('admin sees every run with node detail', async () => {

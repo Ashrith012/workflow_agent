@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "name": "Manzil — Chat with AI",
+  "name": "Manzil - Chat with AI",
   "nodes": [
     {
       "id": "chat_trigger",
@@ -27,7 +27,7 @@
         "categories": "{\n  \"Material Status\": [\n    \"material\",\n    \"delivery\",\n    \"delivered\",\n    \"challan\",\n    \"supply\",\n    \"test certificate\",\n    \"reconciliation\",\n    \"replacement\"\n  ],\n  \"Sign-Off Status\": [\n    \"sign-off\",\n    \"signoff\",\n    \"sign off\",\n    \"signature\",\n    \"acceptance certificate\"\n  ],\n  \"Call Letter Status\": [\n    \"call letter\"\n  ],\n  \"Inspection Status\": [\n    \"inspection\",\n    \"rites\",\n    \"re-inspection\",\n    \"inspected\"\n  ],\n  \"Execution Progress\": [\n    \"execution progress\",\n    \"progress\",\n    \"milestone\"\n  ],\n  \"Work Completion\": [\n    \"work completion\",\n    \"completed work\",\n    \"completion\"\n  ],\n  \"Project Summary\": [\n    \"project summary\",\n    \"summary\",\n    \"overview\"\n  ]\n}",
         "flags": "{\n  \"dashboard\": [\n    \"downloadable chart\",\n    \"downloadable dashboard\",\n    \"executive dashboard\",\n    \"project dashboard\",\n    \"executive summary image\",\n    \"visual dashboard\",\n    \"management dashboard\",\n    \"infographic\",\n    \"project snapshot\"\n  ]\n}",
         "defaultCategory": "Project Summary",
-        "model": "groq:openai/gpt-oss-20b",
+        "model": "selfhosted:qwen2.5:7b",
         "outputField": "classification"
       }
     },
@@ -39,7 +39,7 @@
         "y": 120
       },
       "parameters": {
-        "model": "gemini:gemini-embedding-2",
+        "model": "selfhosted:nomic-embed-text",
         "text": "{{ $json.classification.category }}: {{ $json.message }}",
         "itemsField": "",
         "textKey": "text",
@@ -89,7 +89,7 @@
         "y": 340
       },
       "parameters": {
-        "model": "groq:openai/gpt-oss-120b",
+        "model": "selfhosted:qwen2.5:7b",
         "tools": "",
         "promptTemplates": "manzil_v2, manzil_ui_output",
         "systemPrompt": "",
@@ -112,11 +112,11 @@
         "y": 340
       },
       "parameters": {
-        "model": "groq:openai/gpt-oss-120b",
+        "model": "selfhosted:qwen2.5:7b",
         "tools": "",
         "promptTemplates": "manzil_dashboard",
         "systemPrompt": "",
-        "prompt": "Build the executive dashboard data for: {{ $json.classification.category }} — {{ $json.message }}",
+        "prompt": "Build the executive dashboard data for: {{ $json.classification.category }} - {{ $json.message }}",
         "context": "Report:\n{{ $json.report }}",
         "historyField": "",
         "responseFormat": "json",
