@@ -164,11 +164,12 @@ export function AssistantWidget({ projectId }: { projectId: string }) {
         <button
           type="button"
           onClick={newChat}
-          aria-label="New chat"
-          title="New chat"
-          className="flex h-7 w-7 items-center justify-center rounded-md text-subtle hover:bg-hover hover:text-fg"
+          disabled={busy || (messages.length === 0 && !sessionId)}
+          title="Start a new conversation"
+          className="flex h-7 shrink-0 items-center gap-1 rounded-md border border-line px-2 text-xs font-medium text-fg-soft hover:border-sky-500 hover:bg-sky-500/5 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:text-sky-300"
         >
-          <Plus size={15} />
+          <Plus size={13} />
+          New chat
         </button>
       )}
       {!minimized && (
