@@ -69,7 +69,9 @@ export const appRoutes: FastifyPluginAsync<AppRoutesOptions> = async (app, { db,
       .filter((r) => roleAllowed(r.allowed_roles, request.user.role))
       .map((r) => {
         const params = triggerOf(r.workflow)?.parameters ?? {};
-        const order = Number(params.appOrder);
+        // null, not a default: a page that states no order keeps whatever order the app gives it.
+        const declared = Number(params.appOrder);
+        const order = (params.appOrder ?? '').trim() && Number.isFinite(declared) ? declared : null;
         return {
           eventKey: r.event_key,
           name: r.name,
@@ -78,7 +80,7 @@ export const appRoutes: FastifyPluginAsync<AppRoutesOptions> = async (app, { db,
           section: (params.appSection ?? '').trim(),
           group: (params.appGroup ?? '').trim(),
           icon: (params.appIcon ?? '').trim(),
-          order: Number.isFinite(order) ? order : 100,
+          order,
         };
       });
   });

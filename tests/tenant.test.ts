@@ -201,11 +201,17 @@ test('guardrail outcomes reach the end user in AI Activity, and alerts can be re
   const flat = JSON.stringify(log.items);
   assert.match(flat, /PII (masked|blocked)/);
   assert.match(flat, /policy: (Mask and log|Block)/);
-  // The "> " expansion explains the run step by step, including the safety check.
-  const guarded = log.items.find((i: { guardrails: string }) => i.guardrails);
-  assert.ok(guarded, flat);
-  assert.ok(guarded.steps.some((s: { text: string }) => s.text.startsWith('Safety check:')), JSON.stringify(guarded.steps));
-  assert.ok(guarded.steps.some((s: { text: string }) => /Received your request/.test(s.text)));
+
+  // A guardrail gets its own amber entry on the timeline, as its own event.
+  const guardrail = log.items.find((i: { tone: string }) => i.tone === 'guardrail');
+  assert.ok(guardrail, flat);
+  assert.match(guardrail.title, /^A guardrail (masked|blocked) personal data/);
+  assert.match(guardrail.detail, /policy decided this, not the assistant/);
+
+  // The run it belongs to is a sentence, and "Show steps" explains it step by step.
+  const run = log.items.find((i: { tone: string }) => i.tone === 'agent');
+  assert.ok(run.steps.some((s: { text: string }) => /Received your request/.test(s.text)), JSON.stringify(run.steps));
+  assert.ok(run.steps.some((s: { text: string }) => /Asked the AI model/.test(s.text)));
 
   const { alerts } = (await get('/api/admin/guardrails', adminCookie)).json();
   const open = alerts.filter((a: { status: string }) => a.status === 'open');
@@ -371,9 +377,11 @@ test('the app builds its pages from what each workflow asks for', async () => {
     { section: invoices.section, group: invoices.group, icon: invoices.icon, order: invoices.order, kind: invoices.kind },
     { section: 'Invoices', group: 'Finance', icon: 'briefcase', order: 20, kind: 'event' },
   );
-  // A workflow that declares no page still runs, it just has no sidebar entry of its own.
+  // A workflow that declares no page still runs, it just has no sidebar entry of its own,
+  // and no order of its own either — so the app's own page order stands.
   const activity = events.find((e: { eventKey: string }) => e.eventKey === 'manzil.activity');
   assert.equal(activity.section, '');
+  assert.equal(activity.order, null);
   assert.equal((await post('/api/app/events/finance.invoices', userCookie, { payload: {} })).statusCode, 200);
 });
 

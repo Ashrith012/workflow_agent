@@ -302,6 +302,7 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
       { key: 'scope', label: 'Scope', type: 'select', options: ['mine', 'all'] },
       { key: 'limit', label: 'Limit', type: 'text', placeholder: '50' },
       { key: 'title', label: 'Title', type: 'text', placeholder: 'AI Activity' },
+      { key: 'description', label: 'Description', type: 'text', placeholder: 'Subtitle under the title' },
       { key: 'layout', label: 'Layout', type: 'select', options: ['detailed', 'table', 'feed'] },
       outputField('activity'),
     ],
@@ -316,7 +317,7 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
     parameters: [
       { key: 'scope', label: 'Scope', type: 'select', options: ['mine', 'all'] },
       { key: 'days', label: 'Days', type: 'text', placeholder: '30' },
-      { key: 'layout', label: 'Layout', type: 'select', options: ['full', 'kpis'] },
+      { key: 'layout', label: 'Layout', type: 'select', options: ['full', 'kpis', 'values'] },
       outputField('analytics'),
     ],
   },

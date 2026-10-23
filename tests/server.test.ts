@@ -120,14 +120,37 @@ test('chat keeps per-session history', async () => {
   assert.equal((await event('manzil.chat', { message: '  ' })).statusCode, 400);
 });
 
+test('the Overview page reports Manzil numbers, not platform telemetry', async () => {
+  const { ui } = (await event('manzil.overview')).json();
+  const kpis = ui.blocks.find((b: { type: string }) => b.type === 'kpiCards');
+  assert.ok(kpis, JSON.stringify(ui.blocks.map((b: { type: string }) => b.type)));
+  assert.deepEqual(
+    kpis.cards.map((c: { title: string }) => c.title),
+    ['Projects tracked', 'Indexed passages', 'Reports and answers', 'Answered first time', 'Average answer time'],
+  );
+  // The project numbers come from the document index's facet, not from a hardcoded value.
+  const byTitle = Object.fromEntries(kpis.cards.map((c: { title: string; value: string }) => [c.title, c.value]));
+  assert.equal(byTitle['Projects tracked'], '2'); // PRJ-001 and PRJ-002
+  assert.equal(byTitle['Indexed passages'], '59'); // 42 + 17
+  assert.match(byTitle['Answered first time'], /^(\d+%|—)$/);
+  assert.ok(kpis.cards.every((c: { description: string }) => !c.description.includes('{{')));
+});
+
 test('AI Activity and Analytics come from workflows over the run history', async () => {
   const activity = (await event('manzil.activity')).json().ui;
   const log = activity.blocks[0];
   assert.equal(log.type, 'activityLog');
-  assert.equal(log.items.length, 4); // 2 domain reports + 2 chat turns; dashboard/activity runs have no AI Agent
+  assert.ok(log.description.length > 0);
+  const runs = log.items.filter((i: { tone: string }) => i.tone !== 'guardrail');
+  assert.equal(runs.length, 4); // 2 domain reports + 2 chat turns; runs without an AI Agent are not AI activity
   assert.ok(log.items.every((i: { user?: string }) => i.user === undefined)); // no user detail for a non-admin, even with scope "all"
-  // Every entry expands into plain-words steps of what the run did.
-  assert.ok(log.items[0].steps.length > 0);
+  // Each entry is a sentence naming the assistant and what it did, with steps behind it.
+  assert.ok(runs[0].steps.length > 0);
+  assert.ok(
+    runs.some((i: { title: string }) => /answered\s+“/.test(i.title) && /searched your documents|asked the AI model/.test(i.title)),
+    JSON.stringify(runs.map((i: { title: string }) => i.title)),
+  );
+  assert.ok(runs.every((i: { tone: string }) => ['agent', 'failed', 'running'].includes(i.tone)));
   assert.ok(log.items.some((i: { steps: { text: string }[] }) => i.steps.some((s) => /Asked the AI model/.test(s.text))));
 
   const analytics = (await event('manzil.analytics')).json().ui;
@@ -137,7 +160,7 @@ test('AI Activity and Analytics come from workflows over the run history', async
 
 test('admin sees every run with node detail', async () => {
   const runs = (await get('/api/admin/runs', adminCookie)).json();
-  assert.equal(runs.length, 7); // dashboard, 2 domain, 2 chat, activity, analytics (refused requests never start a run)
+  assert.equal(runs.length, 8); // dashboard, 2 domain, 2 chat, overview, activity, analytics (refused requests never start a run)
   const detail = (await get(`/api/admin/runs/${runs[0].id}`, adminCookie)).json();
   assert.ok(detail.nodes.length > 0);
 });

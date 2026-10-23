@@ -19,10 +19,10 @@ import { EVENTS, type PublishedEvent } from './types';
  * a publish, not a front-end change.
  */
 const BUILT_IN = [
-  { path: 'overview', label: 'Overview', icon: Gauge, event: EVENTS.overview },
-  { path: 'dashboard', label: 'Reports', icon: LayoutDashboard, event: EVENTS.dashboard },
-  { path: 'activity', label: 'AI Activity', icon: Activity, event: EVENTS.activity },
-  { path: 'analytics', label: 'Analytics', icon: BarChart3, event: EVENTS.analytics },
+  { path: 'overview', label: 'Overview', icon: Gauge, event: EVENTS.overview, order: 1 },
+  { path: 'dashboard', label: 'Reports', icon: LayoutDashboard, event: EVENTS.dashboard, order: 2 },
+  { path: 'activity', label: 'AI Activity', icon: Activity, event: EVENTS.activity, order: 3 },
+  { path: 'analytics', label: 'Analytics', icon: BarChart3, event: EVENTS.analytics, order: 4 },
 ] as const;
 
 const BUILT_IN_EVENTS = new Set<string>(BUILT_IN.map((t) => t.event));
@@ -41,15 +41,17 @@ interface NavEntry {
 /** The sidebar's groups, built from the built-in pages plus whatever else is published. */
 function navGroups(events: PublishedEvent[] | null): { group: string; entries: NavEntry[] }[] {
   const byKey = new Map((events ?? []).map((e) => [e.eventKey, e]));
+  // Built-in pages keep their fixed running order unless a workflow states its own.
   const entries: NavEntry[] = BUILT_IN.map((t) => ({
     to: `/app/${t.path}`,
     label: byKey.get(t.event)?.section || t.label,
     icon: t.icon,
     event: t.event,
     group: byKey.get(t.event)?.group || DEFAULT_GROUP,
-    order: byKey.get(t.event)?.order ?? 10,
+    order: byKey.get(t.event)?.order ?? t.order,
     live: events === null || byKey.has(t.event),
   }));
+  // Other agents' pages come after them, in the order each workflow asks for.
   for (const e of events ?? []) {
     if (BUILT_IN_EVENTS.has(e.eventKey) || e.kind === 'chat' || !e.section) continue;
     entries.push({
@@ -58,7 +60,7 @@ function navGroups(events: PublishedEvent[] | null): { group: string; entries: N
       icon: blockIcon(e.icon, Workflow),
       event: e.eventKey,
       group: e.group || DEFAULT_GROUP,
-      order: e.order,
+      order: e.order ?? 100,
       live: true,
     });
   }

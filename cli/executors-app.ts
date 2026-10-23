@@ -109,6 +109,68 @@ const formatMs = (ms: unknown) => (typeof ms === 'number' ? `${(ms / 1000).toFix
 
 const count = (value: unknown): number | undefined => (Array.isArray(value) ? value.length : undefined);
 
+/** "Manzil — Domain Report" reads as the assistant "Domain Report" in the activity timeline. */
+function agentName(workflowName: unknown, eventKey: unknown): string {
+  const name = String(workflowName ?? '').trim();
+  if (!name) return String(eventKey ?? 'An assistant');
+  // Strip a product prefix ("Manzil — Chat") so the assistant's own name leads the sentence.
+  const parts = name.split(/\s+[—–-]\s+/);
+  return (parts.length > 1 ? parts.slice(1).join(' — ') : name).trim() || name;
+}
+
+/** What the run touched, as verbs an end user recognises. */
+function touched(nodes: { type: string }[]): string[] {
+  const types = new Set(nodes.map((n) => n.type));
+  const out: string[] = [];
+  if (types.has('QdrantSearch')) out.push('searched your documents');
+  if (types.has('SharePoint') || types.has('SharePointMCP')) out.push('read SharePoint');
+  if (types.has('RunHistory') || types.has('RunStats') || types.has('PlatformStatus')) out.push('read your activity');
+  if (types.has('AIAgent')) out.push('asked the AI model');
+  return out;
+}
+
+/** A sentence naming who did what, e.g. `Domain Report answered "Material Status"`. */
+function activityTitle(run: any, nodes: { type: string }[]): string {
+  const who = agentName(run.workflow_name, run.event_key);
+  const what = String(run.label ?? '').trim();
+  // When the label is just the workflow's own name it adds nothing to the sentence.
+  const useLabel = what && what.toLowerCase() !== who.toLowerCase();
+  const about = useLabel ? ` “${what.length > 80 ? `${what.slice(0, 80)}…` : what}”` : '';
+  if (run.status === 'failed') return `${who} could not finish${about}`;
+  if (run.status !== 'completed') return `${who} is working on${about || ' your request'}`;
+  const did = touched(nodes);
+  if (did.length === 0) return `${who} answered${about}`;
+  return `${who} ${did.slice(0, 2).join(' and ')}, then answered${about}`;
+}
+
+function activityDetail(run: any, nodes: { type: string }[]): string {
+  const parts = [`${nodes.length} step${nodes.length === 1 ? '' : 's'}`];
+  if (run.status === 'failed' && run.error) parts.push(String(run.error).slice(0, 120));
+  else if (run.user_email) parts.push(String(run.user_email));
+  return parts.join(' · ');
+}
+
+/**
+ * The run's steps in order. A conditional node that was skipped records itself as
+ * completed in no time at all; repeating its sentence would tell the reader a step
+ * happened twice, so an instant repeat is dropped.
+ */
+function describeSteps(nodes: any[]): { text: string; status: string; duration: string }[] {
+  const steps: { text: string; status: string; duration: string }[] = [];
+  for (const n of nodes) {
+    const text = n.status === 'failed' ? `${explainStep(n)} This step failed, so the run stopped here.` : explainStep(n);
+    const instant = Number(n.duration_ms) < 50;
+    if (instant && steps.some((s) => s.text === text)) continue;
+    steps.push({ text, status: n.status, duration: formatMs(n.duration_ms) });
+  }
+  return steps;
+}
+
+function guardrailTitle(guardrails: string): string {
+  const action = /masked/i.test(guardrails) ? 'masked' : /blocked/i.test(guardrails) ? 'blocked' : 'checked';
+  return `A guardrail ${action} personal data in the answer`;
+}
+
 /**
  * One plain-words sentence per executed node, so AI Activity can walk an end
  * user through what the run actually did — what it received, searched, read
@@ -205,28 +267,38 @@ export const appExecutors: Record<string, Executor> = {
     // Guardrail notes ("PII masked — policy: Mask and log") appear when any run has them.
     const hasGuardrails = runs.some((r: any) => r.guardrails);
     if (params.layout !== 'table' && params.layout !== 'feed') {
-      // Default: an expandable log. Each entry opens into a plain-words, step-by-step
-      // account of what the run received, searched, read and produced.
-      const log = {
-        type: 'activityLog',
-        title: params.title || 'AI Activity',
-        items: runs.map((r: any) => ({
-          title: r.label || r.workflow_name || r.event_key,
-          detail: r.workflow_name ?? r.event_key,
+      // Default: a timeline of what the assistants did, newest first. Each entry opens
+      // into a plain-words, step-by-step account of the run, and a guardrail that acted
+      // on a run gets an entry of its own so it is not buried inside it.
+      const items: Record<string, unknown>[] = [];
+      for (const r of runs as any[]) {
+        const nodes = Array.isArray(r.nodes) ? r.nodes : [];
+        items.push({
+          title: activityTitle(r, nodes),
+          detail: activityDetail(r, nodes),
+          tone: r.status === 'failed' ? 'failed' : r.status === 'completed' ? 'agent' : 'running',
           status: r.status === 'completed' ? 'Completed' : r.status === 'failed' ? 'Failed' : 'In Progress',
           at: new Date(r.started_at).toISOString(),
           duration: formatMs(r.duration_ms),
-          guardrails: r.guardrails ?? '',
           ...(all ? { user: r.user_email ?? '' } : {}),
-          steps: [
-            ...(Array.isArray(r.nodes) ? r.nodes : []).map((n: any) => ({
-              text: n.status === 'failed' ? `${explainStep(n)} This step failed, so the run stopped here.` : explainStep(n),
-              status: n.status,
-              duration: formatMs(n.duration_ms),
-            })),
-            ...(r.guardrails ? [{ text: `Safety check: ${r.guardrails}.`, status: 'guardrail', duration: '' }] : []),
-          ],
-        })),
+          steps: describeSteps(nodes),
+        });
+        if (r.guardrails) {
+          items.push({
+            title: guardrailTitle(r.guardrails),
+            detail: `${r.guardrails}. Your organization's policy decided this, not the assistant.`,
+            tone: 'guardrail',
+            at: new Date(r.started_at).toISOString(),
+            duration: '',
+            steps: [],
+          });
+        }
+      }
+      const log = {
+        type: 'activityLog',
+        title: params.title || 'AI Activity',
+        description: params.description || 'Everything the assistants did with your data or on your behalf.',
+        items,
       };
       return mergeOutput(input, params.outputField || 'activity', log);
     }
@@ -282,6 +354,19 @@ export const appExecutors: Record<string, Executor> = {
       ],
     };
     if (params.layout === 'kpis') return mergeOutput(input, params.outputField || 'analytics', kpis);
+    // Raw numbers, for a workflow that composes its own cards in the words of its domain.
+    if (params.layout === 'values') {
+      return mergeOutput(input, params.outputField || 'analytics', {
+        total: s.total,
+        completed: s.completed,
+        failed: s.failed,
+        users: s.users,
+        days,
+        successRate,
+        avgTime: formatMs(s.avgMs),
+        busiestDay: s.byDay.reduce((best: any, d: any) => (!best || d.total > best.total ? d : best), null)?.day ?? '',
+      });
+    }
     const blocks = [
       kpis,
       { type: 'barChart', title: 'Requests per day', labels: s.byDay.map((d: any) => d.day), values: s.byDay.map((d: any) => d.total) },

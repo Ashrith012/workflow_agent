@@ -180,7 +180,17 @@ export const aiExecutors: Record<string, Executor> = {
         { operation, collection, facet_key: params.facetKey ?? '', top_k: topK, live: ctx.live },
         ctx,
       );
-      return mergeOutput(input, params.outputField || 'values', data.values);
+      // Alongside the facet values, their totals as plain numbers, so a workflow can put
+      // "12 projects, 1,480 documents" on a KPI card without any custom code.
+      const values: { value?: unknown; count?: unknown }[] = Array.isArray(data.values) ? data.values : [];
+      const field = params.outputField || 'values';
+      const withValues = mergeOutput(input, field, values);
+      const withCount = mergeOutput(withValues, `${field}Count`, values.length);
+      return mergeOutput(
+        withCount,
+        `${field}Total`,
+        values.reduce((sum, v) => sum + (Number(v?.count) || 0), 0),
+      );
     }
     const vector = readPath(input, params.vectorField || 'vector');
     const threshold = params.scoreThreshold?.trim() ? Number(params.scoreThreshold) : null;

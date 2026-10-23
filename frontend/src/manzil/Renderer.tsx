@@ -1,4 +1,4 @@
-import { ArrowRight, ChevronRight, CircleCheck, CircleDashed, CircleHelp, CircleX, ExternalLink, Gauge, ShieldCheck, Workflow, type LucideIcon } from 'lucide-react';
+import { ArrowRight, CircleCheck, CircleDashed, CircleHelp, CircleX, ExternalLink, Gauge, Workflow, type LucideIcon } from 'lucide-react';
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Sparkline } from './charts';
@@ -319,56 +319,65 @@ function ActivityFeedBlock({ block }: { block: Block }) {
   );
 }
 
+/** Ring colour per kind of entry: agent work, a guardrail, a failure, something still running. */
+const ACTIVITY_TONES: Record<string, string> = {
+  agent: 'border-sky-500',
+  guardrail: 'border-amber-500',
+  user: 'border-emerald-500',
+  failed: 'border-red-500',
+  running: 'border-slate-400',
+};
+
 /**
- * Expandable run log for the AI Activity page. The ">" chevron on each entry
- * opens a plain-words, step-by-step account of what that run did: what it
- * received, searched, read and produced, plus any guardrail outcome.
+ * One entry in the AI Activity timeline: what an assistant did, in a sentence,
+ * with the time underneath and the step-by-step account behind "Show steps".
  */
-function ActivityLogItem({ item }: { item: Record<string, unknown> }) {
+function ActivityLogItem({ item, last }: { item: Record<string, unknown>; last: boolean }) {
   const [open, setOpen] = useState(false);
   const steps = Array.isArray(item.steps) ? (item.steps as Record<string, unknown>[]) : [];
+  const tone = ACTIVITY_TONES[str(item.tone)] ?? ACTIVITY_TONES.agent;
   return (
-    <li className="border-t border-line first:border-t-0">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-        className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-hover"
-      >
-        <ChevronRight size={15} aria-hidden className={`shrink-0 text-subtle transition-transform ${open ? 'rotate-90' : ''}`} />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-fg">{str(item.title)}</span>
-          <span className="block truncate text-xs text-subtle">
-            {[timeAgo(str(item.at)), str(item.duration), str(item.user), str(item.guardrails)].filter(Boolean).join(' · ')}
-          </span>
-        </span>
-        {item.status ? <StatusPill value={str(item.status)} /> : null}
-      </button>
-      {open && (
-        <ol className="space-y-2 border-t border-line/60 bg-page/60 py-3 pl-[46px] pr-4">
-          {steps.length === 0 && <li className="text-xs text-muted">No step detail was recorded for this run.</li>}
-          {steps.map((s, i) => {
-            const failed = s.status === 'failed';
-            const guardrail = s.status === 'guardrail';
-            return (
-              <li key={i} className="flex items-start gap-2.5 text-xs">
-                <span
-                  className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold ${
-                    failed
-                      ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
-                      : guardrail
-                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
-                        : 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300'
-                  }`}
-                >
-                  {guardrail ? <ShieldCheck size={10} aria-hidden /> : i + 1}
-                </span>
-                <span className={`flex-1 leading-relaxed ${failed ? 'text-red-700 dark:text-red-300' : 'text-fg-soft'}`}>{str(s.text)}</span>
-                {str(s.duration) && <span className="shrink-0 tabular-nums text-faint">{str(s.duration)}</span>}
-              </li>
-            );
-          })}
-        </ol>
+    <li className="relative pb-5 pl-7 last:pb-0">
+      {/* The line joins each marker to the next, so the entries read as one thread. */}
+      {!last && <span aria-hidden className="absolute bottom-0 left-[5px] top-5 w-px bg-line" />}
+      <span aria-hidden className={`absolute left-0 top-[5px] h-[11px] w-[11px] rounded-full border-2 bg-panel ${tone}`} />
+
+      <p className="text-sm font-medium leading-snug text-fg">{str(item.title)}</p>
+      <p className="mt-0.5 text-xs text-subtle">
+        {[timeAgo(str(item.at)), str(item.duration), str(item.detail), str(item.user)].filter(Boolean).join(' · ')}
+      </p>
+
+      {steps.length > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setOpen(!open)}
+            aria-expanded={open}
+            className="mt-1 text-xs font-medium text-sky-700 hover:underline dark:text-sky-400"
+          >
+            {open ? 'Hide steps' : 'Show steps'}
+          </button>
+          {open && (
+            <ol className="mt-2 space-y-2 rounded-lg border border-line bg-page/60 p-3">
+              {steps.map((s, i) => {
+                const failed = s.status === 'failed';
+                return (
+                  <li key={i} className="flex items-start gap-2.5 text-xs">
+                    <span
+                      className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold ${
+                        failed ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' : 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300'
+                      }`}
+                    >
+                      {i + 1}
+                    </span>
+                    <span className={`flex-1 leading-relaxed ${failed ? 'text-red-700 dark:text-red-300' : 'text-fg-soft'}`}>{str(s.text)}</span>
+                    {str(s.duration) && <span className="shrink-0 tabular-nums text-faint">{str(s.duration)}</span>}
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </>
       )}
     </li>
   );
@@ -378,12 +387,17 @@ function ActivityLogBlock({ block }: { block: Block }) {
   const items = Array.isArray(block.items) ? (block.items as Record<string, unknown>[]) : [];
   return (
     <BlockFrame title={block.title} description={block.description}>
-      <ul className="overflow-hidden rounded-xl border border-line bg-panel shadow-sm">
-        {items.length === 0 && <li className="px-3 py-4 text-sm text-muted">No activity yet. Run an action to get started.</li>}
-        {items.map((item, i) => (
-          <ActivityLogItem key={i} item={item} />
-        ))}
-      </ul>
+      <div className="rounded-xl border border-line bg-panel p-5 shadow-sm">
+        {items.length === 0 ? (
+          <p className="text-sm text-muted">No activity yet. Ask a question or run a report to get started.</p>
+        ) : (
+          <ol>
+            {items.map((item, i) => (
+              <ActivityLogItem key={i} item={item} last={i === items.length - 1} />
+            ))}
+          </ol>
+        )}
+      </div>
     </BlockFrame>
   );
 }

@@ -38,7 +38,8 @@ export interface PublishedEvent {
   /** Sidebar heading, so several agents can live side by side. */
   group: string;
   icon: string;
-  order: number;
+  /** null when the workflow states no order, so the app's own order stands. */
+  order: number | null;
 }
 
 /** The events the app's built-in pages fire; a published workflow must exist for each. */
