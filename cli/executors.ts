@@ -79,6 +79,8 @@ export const executors: Record<string, Executor> = {
         library: field('library'),
         path: field('path'),
         list_name: field('listName'),
+        // Blank keeps the connector's default (100 files / items).
+        limit: Number(params.limit) > 0 ? Number(params.limit) : undefined,
         content: field('content'),
         live: ctx.live,
       },
