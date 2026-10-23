@@ -45,19 +45,16 @@ export function Sidebar() {
               onDragStart={(e) => onDragStart(e, type)}
               onClick={() => onClickAdd(type)}
               title={`${description}\n\nDrag onto the canvas, or click to add.`}
-              className="group flex w-full cursor-grab items-start gap-2.5 rounded-md border border-line bg-page/60 px-2.5 py-2 text-left text-sm text-fg transition-colors hover:border-line-strong hover:bg-hover active:cursor-grabbing"
+              className="group flex w-full cursor-grab items-center gap-2.5 rounded-md border border-line bg-page/60 px-2.5 py-2 text-left text-sm text-fg transition-colors hover:border-line-strong hover:bg-hover active:cursor-grabbing"
             >
               <span
-                className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded"
                 style={{ backgroundColor: `${accentColor}26`, color: accentColor }}
               >
                 <Icon size={15} />
               </span>
-              <span className="min-w-0 flex-1">
-                <span className="block">{label}</span>
-                <span className="mt-0.5 line-clamp-2 block text-xs leading-4 text-subtle">{description}</span>
-              </span>
-              <GripVertical size={14} className="mt-1 shrink-0 text-faint group-hover:text-muted" />
+              <span className="flex-1">{label}</span>
+              <GripVertical size={14} className="shrink-0 text-faint group-hover:text-muted" />
             </button>
           </li>
         ))}

@@ -316,6 +316,7 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
   {
     type: 'PlatformStatus',
     label: 'Platform Status',
+    description: 'Shows which workflows are live and whether the AI service and recent runs are healthy.',
     accentColor: '#64748b',
     icon: HeartPulse,
     defaultParameters: { title: 'System status', include: 'workflows', outputField: 'status' },
