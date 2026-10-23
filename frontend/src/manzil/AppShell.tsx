@@ -1,10 +1,10 @@
-import { Activity, BarChart3, Gauge, LayoutDashboard, LogOut, Menu, MessageSquare, Moon, Sparkles, Sun, Workflow, X } from 'lucide-react';
+import { Activity, BarChart3, Gauge, LayoutDashboard, LogOut, Menu, Moon, Sparkles, Sun, Workflow, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuthStore } from '../store/useAuthStore';
 import { useThemeStore } from '../store/useThemeStore';
-import { ChatTab } from './ChatTab';
+import { AssistantWidget } from './AssistantWidget';
 import { EventTab } from './EventTab';
 import { DashboardTab } from './DashboardTab';
 import { OverviewTab } from './OverviewTab';
@@ -13,7 +13,6 @@ import { EVENTS } from './types';
 const TABS = [
   { path: 'overview', label: 'Overview', icon: Gauge, event: EVENTS.overview },
   { path: 'dashboard', label: 'Reports', icon: LayoutDashboard, event: EVENTS.dashboard },
-  { path: 'chat', label: 'Chat with AI', icon: MessageSquare, event: EVENTS.chat },
   { path: 'activity', label: 'AI Activity', icon: Activity, event: EVENTS.activity },
   { path: 'analytics', label: 'Analytics', icon: BarChart3, event: EVENTS.analytics },
 ] as const;
@@ -179,13 +178,14 @@ export function AppShell() {
             <Route index element={<Navigate to="/app/overview" replace />} />
             <Route path="overview" element={<OverviewTab projectId={projectId} onProjectChange={setProjectId} />} />
             <Route path="dashboard" element={<DashboardTab projectId={projectId} onProjectChange={setProjectId} />} />
-            <Route path="chat" element={<ChatTab projectId={projectId} />} />
             <Route path="activity" element={<EventTab key="activity" eventKey={EVENTS.activity} />} />
             <Route path="analytics" element={<EventTab key="analytics" eventKey={EVENTS.analytics} />} />
             <Route path="*" element={<Navigate to="/app/overview" replace />} />
           </Routes>
         </main>
       </div>
+
+      {available?.has(EVENTS.chat) && <AssistantWidget projectId={projectId} />}
     </div>
   );
 }
