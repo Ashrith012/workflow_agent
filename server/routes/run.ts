@@ -11,13 +11,13 @@ export interface ErrorResponse {
 }
 
 export interface RunRoutesOptions {
-  /** Hard cap on one execution. Defaults to 120s (a retrieval + report + dashboard chain makes several LLM calls). */
+  /** Hard cap on one execution. Defaults to 10 min (ingesting a SharePoint folder from the builder takes minutes). */
   timeoutMs?: number;
   /** Lets RunHistory / RunStats nodes read real platform data in builder test runs. */
   services?: PlatformServices;
 }
 
-const DEFAULT_TIMEOUT_MS = 120_000;
+const DEFAULT_TIMEOUT_MS = 600_000;
 
 const isPlainObject = (v: unknown): v is Record<string, unknown> =>
   v !== null && typeof v === 'object' && !Array.isArray(v);

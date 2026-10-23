@@ -4,6 +4,7 @@ import { appExecutors } from './executors-app.js';
 import { interpolate } from './interpolate.js';
 import {
   AgentServiceUnreachable,
+  BULK_TIMEOUT_MS,
   isPlainObject,
   mergeOutput,
   postToAgentService,
@@ -82,6 +83,7 @@ export const executors: Record<string, Executor> = {
         live: ctx.live,
       },
       ctx,
+      params.operation === 'getFolderFiles' ? BULK_TIMEOUT_MS : undefined,
     );
     // Blank outputField keeps the original behaviour: the result replaces the input.
     return params.outputField ? mergeOutput(input, params.outputField, result) : result;

@@ -1,7 +1,7 @@
 import type { ExportedWorkflow, RunMode, RunResponse } from '../types';
 
-/** Longer than the server's 120s cap, so the server's "Execution timed out" wins the race. */
-const CLIENT_TIMEOUT_MS = 125_000;
+/** Longer than the server's 10 min cap, so the server's "Execution timed out" wins the race. */
+const CLIENT_TIMEOUT_MS = 605_000;
 
 const UNREACHABLE =
   'Could not reach the API server. Start it with "npm run dev:server" (or "npm run dev:all" for web + API) and try again.';

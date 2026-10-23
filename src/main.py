@@ -298,13 +298,14 @@ class QdrantUpsertRequest(BaseModel):
     collection: str
     points: List[Dict[str, Any]] = Field(description="[{id?, vector, payload}]")
     create_if_missing: bool = True
+    index_fields: List[str] = Field(default_factory=list, description="Payload fields to keyword-index, e.g. project_id")
     live: bool = True
 
 
 @app.post("/connectors/qdrant/upsert")
 async def qdrant_upsert(payload: QdrantUpsertRequest) -> Dict[str, Any]:
     try:
-        return await qdrant.upsert(payload.collection, payload.points, payload.create_if_missing, payload.live)
+        return await qdrant.upsert(payload.collection, payload.points, payload.create_if_missing, payload.live, payload.index_fields)
     except QdrantError as err:
         raise tool_error(err)
     except Exception as err:

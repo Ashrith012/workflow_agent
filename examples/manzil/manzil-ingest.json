@@ -54,8 +54,8 @@
       "parameters": {
         "itemsField": "documents",
         "textKey": "text",
-        "chunkSize": "1500",
-        "overlap": "200",
+        "chunkSize": "2500",
+        "overlap": "250",
         "metadata": "{\n  \"project_id\": \"{{ $json.projectId }}\"\n}",
         "outputField": "chunks"
       }
@@ -86,6 +86,7 @@
         "collection": "project_documents",
         "itemsField": "chunks",
         "createIfMissing": "yes",
+        "indexFields": "project_id, doc_type",
         "outputField": "upsert"
       }
     },

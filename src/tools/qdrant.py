@@ -4,6 +4,7 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 DEFAULT_TEXT_FIELD = "text"
+UPSERT_BATCH = 64
 
 
 class QdrantError(Exception):
@@ -76,6 +77,7 @@ class QdrantTool:
         points: List[Dict[str, Any]],
         create_if_missing: bool = True,
         live: bool = True,
+        index_fields: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         if not collection:
             raise QdrantError("upsert needs a collection name.")
@@ -95,14 +97,22 @@ class QdrantTool:
                 collection_name=collection,
                 vectors_config=models.VectorParams(size=len(points[0]["vector"]), distance=models.Distance.COSINE),
             )
-        await client.upsert(
-            collection_name=collection,
-            points=[
-                models.PointStruct(id=point_id(p), vector=p["vector"], payload=p.get("payload") or {})
-                for p in points
-            ],
-        )
-        return {"collection": collection, "upserted": len(points)}
+        # Keyword indexes make payload filters fast and are required for facets (the project picker).
+        # Creating an index that already exists is a no-op in Qdrant.
+        for field in index_fields or []:
+            await client.create_payload_index(
+                collection_name=collection, field_name=field, field_schema=models.PayloadSchemaType.KEYWORD
+            )
+        # Batches keep each request under Qdrant Cloud's request-size limit (3072-dim vectors are ~60 KB of JSON each).
+        for start in range(0, len(points), UPSERT_BATCH):
+            await client.upsert(
+                collection_name=collection,
+                points=[
+                    models.PointStruct(id=point_id(p), vector=p["vector"], payload=p.get("payload") or {})
+                    for p in points[start : start + UPSERT_BATCH]
+                ],
+            )
+        return {"collection": collection, "upserted": len(points), "indexed_fields": index_fields or []}
 
 
 def point_id(point: Dict[str, Any]) -> str:

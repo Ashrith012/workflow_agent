@@ -165,11 +165,12 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
     label: 'Qdrant Upsert',
     accentColor: '#dc2626',
     icon: DatabaseZap,
-    defaultParameters: { collection: '', itemsField: 'chunks', createIfMissing: 'yes', outputField: 'upsert' },
+    defaultParameters: { collection: '', itemsField: 'chunks', createIfMissing: 'yes', indexFields: 'project_id, doc_type', outputField: 'upsert' },
     parameters: [
       { key: 'collection', label: 'Collection', type: 'text', placeholder: 'project_documents' },
       { key: 'itemsField', label: 'Items field', type: 'text', placeholder: 'chunks (each needs .vector)' },
       { key: 'createIfMissing', label: 'Create collection if missing', type: 'select', options: ['yes', 'no'] },
+      { key: 'indexFields', label: 'Index payload fields', type: 'text', placeholder: 'project_id, doc_type (needed for filters and facets)' },
       outputField('upsert'),
     ],
   },

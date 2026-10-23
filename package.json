@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:server": "tsx watch --env-file-if-exists=.env server/index.ts",
-    "dev:agent": "python -m uvicorn src.main:app --reload --port 8000",
+    "dev:agent": "python -m uvicorn src.main:app --reload --reload-dir src --reload-dir config --reload-include models.json --reload-include agent_config.yaml --port 8000",
     "dev:all": "concurrently -n web,api,agent -c blue,green,yellow \"npm run dev\" \"npm run dev:server\" \"npm run dev:agent\"",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
