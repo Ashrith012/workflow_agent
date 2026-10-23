@@ -17,7 +17,8 @@
     "check:registry": "tsx cli/check-registry.ts",
     "test:agent": "python -m pytest tests/",
     "test:nodes": "tsx --test tests/nodes.test.ts",
-    "test:server": "tsx --test tests/server.test.ts"
+    "test:server": "tsx --test tests/server.test.ts",
+    "ingest": "tsx --env-file-if-exists=.env cli/ingest.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.11",
