@@ -94,7 +94,7 @@ All of these are generic; the Manzil workflows are just one configuration of the
 | AI Agent (new options) | Prompt templates, context, history, JSON output, *Run only if*, output field |
 | Respond to UI | Terminal node; its output is the app's response |
 | Run History / Run Stats | Platform data for the AI Activity, Analytics and Overview workflows. *Layout* `feed` / `kpis` gives the compact Overview versions |
-| Platform Status | Health of the workflow engine and agent service, runs in progress, 24 h failures, and the live workflows the user's role can run |
+| Platform Status | *Include* `workflows` (default): the live workflows the user's role can run. `health` / `both` add a system status card (engine, agent service, runs in progress, 24 h failures) |
 
 Most data nodes have an **Output field** and add their result to the incoming item, so later nodes still see earlier values. *On error: continue* on Qdrant Search and SharePoint MCP lets a run finish when that source is unavailable.
 

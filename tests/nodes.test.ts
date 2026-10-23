@@ -140,8 +140,12 @@ test('PlatformStatus reports health and the workflows the role can run', async (
       roles.push(role), { running: 0, runs24h: 3, failed24h: 2, lastRunAt: null, published: [{ event_key: 'a.b', name: 'A', version: 2 }] }
     ),
   };
-  const { status } = await executors.PlatformStatus({}, {}, ctx({ services, user: { id: 'u1', email: 'u@x', role: 'user' } }));
-  assert.deepEqual(roles, ['user']);
+  const user = { id: 'u1', email: 'u@x', role: 'user' };
+  const { status: byDefault } = await executors.PlatformStatus({}, {}, ctx({ services, user }));
+  assert.deepEqual(byDefault.map((b: { title: string }) => b.title), ['Live workflows']);
+
+  const { status } = await executors.PlatformStatus({}, { include: 'both' }, ctx({ services, user }));
+  assert.deepEqual(roles, ['user', 'user']);
   const [health, workflows] = status;
   assert.equal(health.type, 'statusList');
   assert.equal(health.items.find((i: { label: string }) => i.label === 'Failures (24 h)').status, 'warn');

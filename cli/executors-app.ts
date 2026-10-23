@@ -212,33 +212,35 @@ export const appExecutors: Record<string, Executor> = {
     return mergeOutput(input, params.outputField || 'analytics', blocks);
   },
 
+  // `include`: workflows (default) is the live-workflows card only; health is the system status card; both is both.
   PlatformStatus: async (input, params, ctx) => {
     const services = requireServices(ctx, 'PlatformStatus');
+    const include = params.include || 'workflows';
+    const health = include === 'health' || include === 'both';
     const [s, agent]: [any, Awaited<ReturnType<typeof pingAgentService>>] = await Promise.all([
       services ? services.platformStatus({ role: ctx.user?.role ?? 'user' }) : MOCK_STATUS,
-      ctx.live || services ? pingAgentService(ctx) : { ok: true, ms: 12 },
+      health && (ctx.live || services) ? pingAgentService(ctx) : { ok: true, ms: 12 },
     ]);
     const published: any[] = s.published ?? [];
     const lastRun = s.lastRunAt ? new Date(s.lastRunAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : 'No runs yet';
-    const blocks = [
-      {
-        type: 'statusList',
-        title: params.title || 'System status',
-        items: [
-          { label: 'Workflow engine', status: 'ok', detail: `${published.length} workflow(s) live` },
-          { label: 'AI agent service', status: agent.ok ? 'ok' : 'down', detail: agent.ok ? `Responding in ${agent.ms} ms` : 'Unreachable' },
-          { label: 'Run mode', status: ctx.live ? 'ok' : 'warn', detail: ctx.live ? 'Live models and connectors' : 'Mock (demo data)' },
-          { label: 'Runs in progress', status: 'ok', detail: `${s.running ?? 0} now · ${s.runs24h ?? 0} in 24 h` },
-          { label: 'Failures (24 h)', status: s.failed24h > 0 ? 'warn' : 'ok', detail: s.failed24h > 0 ? `${s.failed24h} failed run(s)` : 'None' },
-          { label: 'Last activity', status: 'ok', detail: lastRun },
-        ],
-      },
-      {
-        type: 'statusList',
-        title: 'Live workflows',
-        items: published.map((p) => ({ label: p.name, status: 'ok', detail: `${p.event_key} · v${p.version}` })),
-      },
-    ];
+    const healthBlock = {
+      type: 'statusList',
+      title: params.title || 'System status',
+      items: [
+        { label: 'Workflow engine', status: 'ok', detail: `${published.length} workflow(s) live` },
+        { label: 'AI agent service', status: agent.ok ? 'ok' : 'down', detail: agent.ok ? `Responding in ${agent.ms} ms` : 'Unreachable' },
+        { label: 'Run mode', status: ctx.live ? 'ok' : 'warn', detail: ctx.live ? 'Live models and connectors' : 'Mock (demo data)' },
+        { label: 'Runs in progress', status: 'ok', detail: `${s.running ?? 0} now · ${s.runs24h ?? 0} in 24 h` },
+        { label: 'Failures (24 h)', status: s.failed24h > 0 ? 'warn' : 'ok', detail: s.failed24h > 0 ? `${s.failed24h} failed run(s)` : 'None' },
+        { label: 'Last activity', status: 'ok', detail: lastRun },
+      ],
+    };
+    const workflowsBlock = {
+      type: 'statusList',
+      title: 'Live workflows',
+      items: published.map((p) => ({ label: p.name, status: 'ok', detail: `${p.event_key} · v${p.version}` })),
+    };
+    const blocks = include === 'health' ? [healthBlock] : include === 'both' ? [healthBlock, workflowsBlock] : [workflowsBlock];
     return mergeOutput(input, params.outputField || 'status', blocks);
   },
 };

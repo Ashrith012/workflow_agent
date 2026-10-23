@@ -73,6 +73,7 @@
       },
       "parameters": {
         "title": "System status",
+        "include": "workflows",
         "outputField": "status"
       }
     },
@@ -97,7 +98,7 @@
       },
       "parameters": {
         "title": "",
-        "blocksFrom": "hero, kpis, actionsIntro, dashboardToggle, actions, feed, status[1]",
+        "blocksFrom": "hero, kpis, actionsIntro, dashboardToggle, actions, feed, status",
         "sourcesFrom": "",
         "emptyMessage": ""
       }

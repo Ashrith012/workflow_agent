@@ -301,9 +301,10 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
     label: 'Platform Status',
     accentColor: '#64748b',
     icon: HeartPulse,
-    defaultParameters: { title: 'System status', outputField: 'status' },
+    defaultParameters: { title: 'System status', include: 'workflows', outputField: 'status' },
     parameters: [
-      { key: 'title', label: 'Title', type: 'text', placeholder: 'System status' },
+      { key: 'include', label: 'Include', type: 'select', options: ['workflows', 'health', 'both'] },
+      { key: 'title', label: 'Health card title', type: 'text', placeholder: 'System status' },
       outputField('status'),
     ],
   },
