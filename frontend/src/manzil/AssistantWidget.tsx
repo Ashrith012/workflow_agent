@@ -1,4 +1,4 @@
-import { Loader2, Minus, Plus, SendHorizontal, X } from 'lucide-react';
+import { Loader2, Maximize2, Minimize2, Minus, Plus, SendHorizontal, X } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api, ApiError } from '../api/client';
 import { Renderer } from './Renderer';
@@ -38,6 +38,7 @@ function writeSession(id: string | undefined) {
 export function AssistantWidget({ projectId }: { projectId: string }) {
   const [open, setOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
+  const [maximized, setMaximized] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [greeting, setGreeting] = useState(false);
   const [sessionId, setSessionId] = useState(readSession);
@@ -65,6 +66,14 @@ export function AssistantWidget({ projectId }: { projectId: string }) {
   useEffect(() => {
     if (open && !minimized) inputRef.current?.focus();
   }, [open, minimized]);
+
+  // Escape restores a maximized window to its normal size.
+  useEffect(() => {
+    if (!maximized) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setMaximized(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [maximized]);
 
   // Greet the user shortly after load, only while the window is still closed.
   useEffect(() => {
@@ -162,9 +171,23 @@ export function AssistantWidget({ projectId }: { projectId: string }) {
           <Plus size={15} />
         </button>
       )}
+      {!minimized && (
+        <button
+          type="button"
+          onClick={() => setMaximized((v) => !v)}
+          aria-label={maximized ? 'Restore chat size' : 'Maximize chat'}
+          title={maximized ? 'Restore' : 'Maximize'}
+          className="flex h-7 w-7 items-center justify-center rounded-md text-subtle hover:bg-hover hover:text-fg"
+        >
+          {maximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+        </button>
+      )}
       <button
         type="button"
-        onClick={() => setMinimized((v) => !v)}
+        onClick={() => {
+          setMaximized(false);
+          setMinimized((v) => !v);
+        }}
         aria-label={minimized ? 'Expand chat' : 'Minimize chat'}
         title={minimized ? 'Expand' : 'Minimize'}
         className="flex h-7 w-7 items-center justify-center rounded-md text-subtle hover:bg-hover hover:text-fg"
@@ -173,7 +196,10 @@ export function AssistantWidget({ projectId }: { projectId: string }) {
       </button>
       <button
         type="button"
-        onClick={() => setOpen(false)}
+        onClick={() => {
+          setOpen(false);
+          setMaximized(false);
+        }}
         aria-label="Close chat"
         title="Close"
         className="flex h-7 w-7 items-center justify-center rounded-md text-subtle hover:bg-hover hover:text-fg"
@@ -194,57 +220,79 @@ export function AssistantWidget({ projectId }: { projectId: string }) {
     );
   }
 
+  // Maximized: nearly full screen over a dimmed backdrop; content is centred at a readable width.
+  const content = maximized ? 'mx-auto w-full max-w-4xl' : '';
   return (
-    <div className="fixed bottom-5 right-5 z-50 flex h-[32rem] max-h-[calc(100vh-2.5rem)] w-96 max-w-[calc(100vw-2.5rem)] flex-col overflow-hidden rounded-xl border border-line bg-page shadow-2xl shadow-black/20">
-      {header}
-
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3">
-        {messages.length === 0 && !busy && (
-          <p className="px-2 pt-10 text-center text-sm text-muted">
-            Ask about material status, sign-offs, call letters, inspections, execution progress or work completion. Add “executive dashboard” for a visual summary.
-          </p>
-        )}
-        {messages.map((m, i) =>
-          m.role === 'user' ? (
-            <div key={i} className="ml-auto max-w-[85%] rounded-2xl rounded-br-sm bg-sky-600 px-3.5 py-2 text-sm text-white">
-              {m.content}
-            </div>
-          ) : m.role === 'error' ? (
-            <p key={i} role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/70 dark:bg-red-950 dark:text-red-200">
-              {m.content}
-            </p>
-          ) : (
-            <div key={i} className="rounded-xl border border-line bg-panel p-3">
-              {m.ui ? <Renderer ui={m.ui} /> : <p className="whitespace-pre-wrap text-sm">{m.content}</p>}
-            </div>
-          ),
-        )}
-        {busy && (
-          <p className="flex items-center gap-2 text-sm text-muted" role="status">
-            <Loader2 size={15} className="animate-spin" /> Validating against the knowledge source…
-          </p>
-        )}
-        <div ref={endRef} />
-      </div>
-
-      <form onSubmit={send} className="flex gap-2 border-t border-line p-2.5">
-        <input
-          ref={inputRef}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder="Ask the assistant…"
-          aria-label="Message"
-          className="flex-1 rounded-md border border-line bg-panel px-3 py-2 text-sm text-fg placeholder:text-faint focus:border-line-strong focus:outline-none"
-        />
+    <>
+      {maximized && (
         <button
-          type="submit"
-          disabled={busy || !draft.trim()}
-          aria-label="Send"
-          className="flex items-center justify-center rounded-md bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50"
-        >
-          <SendHorizontal size={15} />
-        </button>
-      </form>
-    </div>
+          type="button"
+          aria-label="Restore chat size"
+          onClick={() => setMaximized(false)}
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+        />
+      )}
+      <div
+        className={`fixed z-50 flex flex-col overflow-hidden rounded-xl border border-line bg-page shadow-2xl shadow-black/20 ${
+          maximized
+            ? 'inset-3 sm:inset-6'
+            : 'bottom-5 right-5 h-[32rem] max-h-[calc(100vh-2.5rem)] w-96 max-w-[calc(100vw-2.5rem)]'
+        }`}
+      >
+        {header}
+
+        <div className={`min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3 ${maximized ? 'sm:px-6' : ''}`}>
+          <div className={`space-y-3 ${content}`}>
+            {messages.length === 0 && !busy && (
+              <p className="px-2 pt-10 text-center text-sm text-muted">
+                Ask about material status, sign-offs, call letters, inspections, execution progress or work completion. Add “executive dashboard” for a visual summary.
+              </p>
+            )}
+            {messages.map((m, i) =>
+              m.role === 'user' ? (
+                <div key={i} className="ml-auto max-w-[85%] rounded-2xl rounded-br-sm bg-sky-600 px-3.5 py-2 text-sm text-white">
+                  {m.content}
+                </div>
+              ) : m.role === 'error' ? (
+                <p key={i} role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/70 dark:bg-red-950 dark:text-red-200">
+                  {m.content}
+                </p>
+              ) : (
+                <div key={i} className="rounded-xl border border-line bg-panel p-3">
+                  {m.ui ? <Renderer ui={m.ui} /> : <p className="whitespace-pre-wrap text-sm">{m.content}</p>}
+                </div>
+              ),
+            )}
+            {busy && (
+              <p className="flex items-center gap-2 text-sm text-muted" role="status">
+                <Loader2 size={15} className="animate-spin" /> Validating against the knowledge source…
+              </p>
+            )}
+            <div ref={endRef} />
+          </div>
+        </div>
+
+        <form onSubmit={send} className={`flex gap-2 border-t border-line p-2.5 ${maximized ? 'sm:px-6 sm:py-3' : ''}`}>
+          <div className={`flex flex-1 gap-2 ${content}`}>
+            <input
+              ref={inputRef}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="Ask the assistant…"
+              aria-label="Message"
+              className="flex-1 rounded-md border border-line bg-panel px-3 py-2 text-sm text-fg placeholder:text-faint focus:border-line-strong focus:outline-none"
+            />
+            <button
+              type="submit"
+              disabled={busy || !draft.trim()}
+              aria-label="Send"
+              className="flex items-center justify-center rounded-md bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+            >
+              <SendHorizontal size={15} />
+            </button>
+          </div>
+        </form>
+      </div>
+    </>
   );
 }
