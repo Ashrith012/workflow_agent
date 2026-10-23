@@ -2,6 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Greeting bubble pop-in for the AI assistant launcher. */
+@keyframes assistant-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.animate-pop-in {
+  animation: assistant-pop-in 0.22s ease-out;
+  transform-origin: bottom right;
+}
+
 /* Theme tokens (RGB triplets, consumed via tailwind.config.js). */
 :root,
 :root[data-theme='dark'] {

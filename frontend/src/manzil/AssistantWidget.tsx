@@ -39,6 +39,7 @@ export function AssistantWidget({ projectId }: { projectId: string }) {
   const [open, setOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [greeting, setGreeting] = useState(false);
   const [sessionId, setSessionId] = useState(readSession);
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
@@ -64,6 +65,13 @@ export function AssistantWidget({ projectId }: { projectId: string }) {
   useEffect(() => {
     if (open && !minimized) inputRef.current?.focus();
   }, [open, minimized]);
+
+  // Greet the user shortly after load, only while the window is still closed.
+  useEffect(() => {
+    if (open) return;
+    const t = setTimeout(() => setGreeting(true), 1200);
+    return () => clearTimeout(t);
+  }, [open]);
 
   const send = async (e: FormEvent) => {
     e.preventDefault();
@@ -96,20 +104,41 @@ export function AssistantWidget({ projectId }: { projectId: string }) {
   const launch = () => {
     setOpen(true);
     setMinimized(false);
+    setGreeting(false);
   };
 
-  // Launcher icon (shown when the window is closed).
+  // Launcher icon + greeting bubble (shown when the window is closed).
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={launch}
-        aria-label="Open AI assistant"
-        title="AI assistant"
-        className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-white shadow-lg shadow-indigo-500/30 ring-1 ring-black/5 transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-sky-500 dark:bg-slate-800 dark:ring-white/10"
-      >
-        <img src="/ai-assistant.png" alt="" className="h-11 w-11" />
-      </button>
+      <div className="fixed bottom-5 right-5 z-50 flex items-end gap-2.5">
+        {greeting && (
+          <div className="animate-pop-in relative mb-1 max-w-[16rem] rounded-2xl rounded-br-sm border border-line bg-panel px-3.5 py-2.5 text-sm text-fg shadow-lg shadow-black/10">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setGreeting(false);
+              }}
+              aria-label="Dismiss"
+              className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full border border-line bg-panel text-subtle shadow hover:text-fg"
+            >
+              <X size={11} />
+            </button>
+            <button type="button" onClick={launch} className="text-left">
+              <span className="font-medium">Hey! 👋</span> How can I help you?
+            </button>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={launch}
+          aria-label="Open AI assistant"
+          title="AI assistant"
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white shadow-lg shadow-indigo-500/30 ring-1 ring-black/5 transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-sky-500 dark:bg-slate-800 dark:ring-white/10"
+        >
+          <img src="/ai-assistant.png" alt="" className="h-11 w-11" />
+        </button>
+      </div>
     );
   }
 

@@ -165,7 +165,7 @@ export function AppShell() {
         </main>
       </div>
 
-      {available?.has(EVENTS.chat) && <AssistantWidget projectId={projectId} />}
+      <AssistantWidget projectId={projectId} />
     </div>
   );
 }
